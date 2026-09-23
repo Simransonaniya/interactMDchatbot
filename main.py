@@ -3,6 +3,7 @@ InteractMD — Python AI Patient Chatbot Backend with Full PostgreSQL DB & Auth 
 Built with FastAPI, SQLAlchemy 2.x, Alembic, PostgreSQL, and JWT.
 """
 
+import time
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.responses import JSONResponse
@@ -21,7 +22,6 @@ from schemas import (
 from ai_engine import AIPatientEngine
 from evaluator import evaluate_encounter
 from services.case_service import get_case_by_id
-from api.sessions import build_case_dict_for_ai
 
 from api.auth import router as auth_router
 from api.cases import router as cases_router
@@ -30,19 +30,27 @@ from models.session_model import SimulationSession
 from models.message import Message
 from models.evaluation import Evaluation
 
+from mongo_db import mongo_manager
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Ensure DB connection can be initialized (without auto-seeding cases)
+    # Startup: Ensure Database and MongoDB Atlas connections
     try:
         Base.metadata.create_all(bind=db_engine)
-        print("[Lifespan] Database initialized successfully. Zero default cases auto-seeded.")
+        print("[Lifespan] Relational tables checked.")
     except Exception as e:
-        print(f"[Lifespan Warning] Database check: {e}")
+        print(f"[Lifespan Warning] Relational check: {e}")
+
+    try:
+        if mongo_manager.is_connected:
+            print("[Lifespan] MongoDB Atlas connected and active.")
+    except Exception as e:
+        print(f"[Lifespan Warning] MongoDB check: {e}")
     yield
 
 app = FastAPI(
     title="InteractMD Python AI Backend",
-    description="Full Python Backend for AI Clinical Simulation, Auth, Cases, & Session Persistence",
+    description="Full Python Backend for AI Clinical Simulation, Auth, Cases, & Session Persistence with RAG and MongoDB Atlas",
     version="2.0.0",
     lifespan=lifespan
 )
@@ -70,6 +78,8 @@ def root():
         "service": "InteractMD Python Backend",
         "status": "online",
         "version": "2.0.0",
+        "database": "MongoDB Atlas" if mongo_manager.is_connected else "Local/PostgreSQL",
+        "rag_engine": "Active",
         "docs": "/docs"
     }
 
@@ -82,22 +92,28 @@ def health_endpoint():
 
 @app.get("/ready")
 def readiness_endpoint(db: Session = Depends(get_db)):
-    """Readiness probe that explicitly tests PostgreSQL database connectivity."""
+    """Readiness probe that tests database connectivity."""
+    db_connected = False
     try:
         db.execute(text("SELECT 1"))
+        db_connected = True
+    except Exception:
+        pass
+
+    if db_connected or mongo_manager.is_connected:
         return {
             "status": "ready",
-            "database": "connected"
+            "database": "connected",
+            "mongo_atlas": "connected" if mongo_manager.is_connected else "offline"
         }
-    except Exception as e:
-        return JSONResponse(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={
-                "status": "not_ready",
-                "database": "disconnected",
-                "detail": str(e)
-            }
-        )
+
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={
+            "status": "not_ready",
+            "database": "disconnected"
+        }
+    )
 
 
 @app.get("/api/health")
@@ -105,154 +121,86 @@ def api_health_check():
     """Healthcheck endpoint called by the frontend (apiClient.ts)."""
     return {
         "status": "online",
-        "provider": ai_patient_engine.provider_name
+        "provider": ai_patient_engine.provider_name,
+        "rag": True,
+        "database": "MongoDB Atlas" if mongo_manager.is_connected else "PostgreSQL"
     }
 
 
+from ai_orchestrator import ai_orchestrator
+from services.examination_service import examination_service
+from services.investigation_service import investigation_service
+from services.evaluation_service import evaluation_service
+
+
 @app.post("/api/simulation/chat", response_model=ChatResponse)
-def patient_chat(request: ChatRequest, db: Session = Depends(get_db)):
+def patient_chat(request: ChatRequest):
     """
     Core AI Patient dialogue turn.
-    Called by frontend when learner asks the patient a question.
-    Loads the case directly from PostgreSQL.
+    Authoritatively loads clinical ground truth from MongoDB.
+    Runs AI Orchestrator with progressive fact disclosure and Response Validator.
+    Persists dialogue and interaction events in MongoDB.
     """
-    case = get_case_by_id(db, request.case_id)
-    if not case:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Clinical case '{request.case_id}' was not found in the database."
-        )
-
-    case_dict = build_case_dict_for_ai(case)
-    history_dicts = [m.model_dump() for m in request.conversation_history]
+    history_dicts = [m.model_dump() if hasattr(m, 'model_dump') else dict(m) for m in request.conversation_history]
     
-    result = ai_patient_engine.process_turn(
-        case_data=case_dict,
+    result = ai_orchestrator.process_turn_sync(
+        case_id=request.case_id,
         user_message=request.message,
+        session_id=request.session_id,
         conversation_history=history_dicts
     )
 
-    session_id = request.session_id
-    if session_id:
-        session = db.query(SimulationSession).filter(SimulationSession.id == session_id).first()
-        if session:
-            user_msg = Message(
-                session_id=session_id,
-                sender="LEARNER",
-                message=request.message,
-                metadata_json={"empathy_detected": result["empathy_detected"]}
-            )
-            patient_msg = Message(
-                session_id=session_id,
-                sender="PATIENT",
-                message=result["reply"],
-                metadata_json={"category": result["category"], "provider": result["provider"]}
-            )
-            db.add_all([user_msg, patient_msg])
-            db.commit()
-
     return ChatResponse(
-        reply=result["reply"],
-        empathy_detected=result["empathy_detected"],
-        category=result["category"],
-        provider=result["provider"],
-        suggested_topics=result["suggested_topics"],
-        session_id=session_id
+        session_id=result.get("session_id") or request.session_id,
+        message={"role": "patient", "text": result.get("reply", "")},
+        reply=result.get("reply", ""),
+        empathy_detected=result.get("empathy_detected", False),
+        category=result.get("category", "General"),
+        provider=result.get("provider", ai_orchestrator.provider_name),
+        facts_revealed=result.get("facts_revealed", []),
+        suggested_topics=result.get("suggested_topics", []),
+        session_state=result.get("session_state")
     )
 
 
 @app.post("/api/simulation/evaluate", response_model=EvaluationResponse)
-def submit_evaluation(request: EvaluationRequest, db: Session = Depends(get_db)):
+def submit_evaluation(request: EvaluationRequest):
     """
     Attending Physician OSCE evaluation endpoint.
-    Scores the completed encounter across 5 dimensions and persists evaluation to PostgreSQL.
+    Scores the completed encounter across 5 dimensions against MongoDB scoring rubric.
     """
-    case = get_case_by_id(db, request.case_id)
-    if not case:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Clinical case '{request.case_id}' was not found in the database."
-        )
-
-    eval_resp = evaluate_encounter(request, case_obj=case)
-
-    session_id = request.session_id or eval_resp.session_id
-    if session_id:
-        session = db.query(SimulationSession).filter(SimulationSession.id == session_id).first()
-        if session:
-            session.status = "COMPLETED"
-            
-            existing_eval = db.query(Evaluation).filter(Evaluation.session_id == session_id).first()
-            if not existing_eval:
-                db_eval = Evaluation(
-                    session_id=session_id,
-                    user_id=session.user_id,
-                    score=eval_resp.overall_score,
-                    feedback=eval_resp.attending_physician_notes,
-                    strengths=eval_resp.strengths,
-                    areas_for_improvement=eval_resp.areas_to_improve,
-                    category_scores={d.dimension: d.score for d in eval_resp.dimensions}
-                )
-                db.add(db_eval)
-            db.commit()
-
-    return eval_resp
+    return evaluation_service.evaluate_session(
+        case_id=request.case_id,
+        session_id=request.session_id,
+        conversation_history=request.conversation_history,
+        performed_exam_ids=request.performed_exam_ids,
+        ordered_investigation_ids=request.ordered_investigation_ids,
+        primary_diagnosis_id=request.primary_diagnosis_id,
+        differential_diagnosis_ids=request.differential_diagnosis_ids,
+        selected_management_ids=request.selected_management_ids,
+        clinical_rationale=request.clinical_rationale,
+        duration_seconds=request.duration_seconds
+    )
 
 
 @app.post("/api/simulation/exam")
-def perform_exam(request: ExamRequest, db: Session = Depends(get_db)):
-    """Physical examination maneuver results loaded from PostgreSQL."""
-    case = get_case_by_id(db, request.case_id)
-    if not case:
-        raise HTTPException(status_code=404, detail="Case not found in database.")
-    
-    findings = case.physical_findings or []
-    if request.exam_id:
-        matched = [f for f in findings if f.id == request.exam_id]
-    elif request.system:
-        matched = [f for f in findings if f.system.lower() == request.system.lower()]
-    else:
-        matched = findings
-
-    return {
-        "case_id": request.case_id,
-        "findings": [
-            {
-                "id": f.id,
-                "system": f.system,
-                "finding": f.finding,
-                "value": f.value,
-                "description": f.description
-            }
-            for f in matched
-        ]
-    }
+def perform_exam(request: ExamRequest):
+    """Physical examination maneuver results loaded authoritatively from MongoDB."""
+    return examination_service.perform_exam(
+        case_id=request.case_id or "chest_pain_001",
+        session_id=None,
+        exam_id=request.exam_id,
+        system=request.system
+    )
 
 
 @app.post("/api/simulation/investigation")
-def order_investigation(request: InvestigationRequest, db: Session = Depends(get_db)):
-    """Diagnostic investigations loaded from PostgreSQL."""
-    case = get_case_by_id(db, request.case_id)
-    if not case:
-        raise HTTPException(status_code=404, detail="Case not found in database.")
+def order_investigation(request: InvestigationRequest):
+    """Diagnostic investigations loaded authoritatively from MongoDB."""
+    test_id = request.test_id or request.test or "STAT 12-Lead ECG"
+    return investigation_service.order_investigation(
+        case_id=request.case_id or "chest_pain_001",
+        test_id=test_id,
+        session_id=None
+    )
 
-    investigations = case.investigations or []
-    matched = next((inv for inv in investigations if inv.id.lower() == request.test_id.lower() or request.test_id.lower() in inv.name.lower()), None)
-    
-    if not matched:
-        raise HTTPException(status_code=400, detail=f"Diagnostic test '{request.test_id}' not indicated or available.")
-
-    return {
-        "case_id": request.case_id,
-        "test": matched.name,
-        "turnaroundMinutes": 15,
-        "result": {
-            "id": matched.id,
-            "name": matched.name,
-            "category": matched.category,
-            "result": matched.result,
-            "unit": matched.unit,
-            "reference_range": matched.reference_range,
-            "is_available": matched.is_available
-        }
-    }

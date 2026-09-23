@@ -1,22 +1,31 @@
 """
-Attending Physician Clinical Evaluation Engine.
-Evaluates encounters across 5 core OSCE dimensions with actionable feedback,
-using Case and CaseHiddenEvaluation data from PostgreSQL.
+InteractMD — Evaluation Module Bridge.
+Delegates to EvaluationService backed by MongoDB source of truth.
 """
 
-from typing import Dict, Any, List, Optional
-from schemas import EvaluationRequest, EvaluationResponse, DimensionScore
-from models.case_model import Case
+from typing import Optional, Any
+from services.evaluation_service import evaluation_service
+from schemas import EvaluationRequest, EvaluationResponse
 
-def evaluate_encounter(req: EvaluationRequest, case_obj: Optional[Case] = None) -> EvaluationResponse:
-    hidden_eval = case_obj.hidden_evaluation if case_obj else None
-    
-    all_conversations = [
-        m.get("text", "").lower()
-        for m in req.conversation_history
-        if m.get("sender") in ["student", "doctor", "LEARNER", "user"]
-    ]
-    doctor_text = " ".join(all_conversations)
+
+def evaluate_encounter(req: EvaluationRequest, case_obj: Optional[Any] = None) -> EvaluationResponse:
+    """Evaluates completed encounter across 5 dimensions based on MongoDB case rubric."""
+    return evaluation_service.evaluate_session(
+        case_id=req.case_id,
+        session_id=req.session_id,
+        conversation_history=req.conversation_history,
+        performed_exam_ids=req.performed_exam_ids,
+        ordered_investigation_ids=req.ordered_investigation_ids,
+        primary_diagnosis_id=req.primary_diagnosis_id,
+        differential_diagnosis_ids=req.differential_diagnosis_ids,
+        selected_management_ids=req.selected_management_ids,
+        clinical_rationale=req.clinical_rationale,
+        duration_seconds=req.duration_seconds
+    )
+
+
+def _legacy_placeholder():
+    pass
 
     # -------------------------------------------------------------
     # 1. Interview Completeness & Pertinent Negatives (25%)

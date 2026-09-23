@@ -1,0 +1,240 @@
+{
+  "case_id": "abdominal_pain_003",
+  "id": "abdominal_pain_003",
+  "version": 1,
+  "title": "Migratory Right Lower Quadrant Abdominal Pain",
+  "specialty": "Gastroenterology / Surgery",
+  "presentation": "Abdominal Pain",
+  "difficulty": "Novice",
+  "status": "published",
+  "is_published": true,
+  "learning_objectives": [
+    "Trace classic visceral-to-somatic pain migration in acute abdomen",
+    "Elicit peritoneal signs (McBurney tenderness, Rovsing, Psoas sign)",
+    "Order targeted abdominal ultrasound/CT imaging and inflammatory labs",
+    "Keep patient NPO and obtain urgent surgical consultation"
+  ],
+  "patient": {
+    "name": "Marcus Vance",
+    "age": 24,
+    "sex": "male",
+    "gender": "Male",
+    "occupation": "software engineer",
+    "persona": {
+      "personality": "guarded",
+      "communication_style": "ordinary_patient",
+      "emotional_state": "distressed"
+    },
+    "opening_statement": "Doc, every bump in the road on the way here was pure agony. It started near my navel but now it's focused low down on the right side.",
+    "initial_statement": "Doc, every bump in the road on the way here was pure agony. It started near my navel but now it's focused low down on the right side.",
+    "presentation_complaint": "My stomach started hurting around my belly button yesterday, but now it has moved down to the right side and hurts when I walk.",
+    "initial_vitals": {
+      "heart_rate": 88,
+      "blood_pressure": "122/76",
+      "respiratory_rate": 16,
+      "oxygen_saturation": 99,
+      "temperature": 37.9,
+      "pain_score": 7
+    }
+  },
+  "history": {
+    "chief_complaint": {
+      "value": "My stomach started hurting around my belly button yesterday, and now it has moved down to my lower right side.",
+      "state": "AVAILABLE"
+    },
+    "onset_timing": {
+      "value": "It started yesterday evening, around 7 PM.",
+      "state": "AVAILABLE"
+    },
+    "onset_activity": {
+      "value": "I was just relaxing at home yesterday evening.",
+      "state": "AVAILABLE"
+    },
+    "location": {
+      "value": "Low down on the right side of my stomach.",
+      "state": "AVAILABLE"
+    },
+    "character": {
+      "value": "It started as a dull ache around my navel, but now it's a sharp, constant pain low down on my right side.",
+      "state": "AVAILABLE"
+    },
+    "severity": {
+      "value": "It's about a 7 right now.",
+      "state": "AVAILABLE"
+    },
+    "radiation": {
+      "value": "It moved from around my belly button down to the lower right side of my stomach.",
+      "state": "AVAILABLE"
+    },
+    "timing": {
+      "value": "Yes, it hasn't really gone away.",
+      "state": "AVAILABLE"
+    },
+    "aggravating_factors": {
+      "value": "Coughing, walking, or any bumps make the pain much sharper.",
+      "state": "AVAILABLE"
+    },
+    "relieving_factors": {
+      "value": "Lying completely still helps a little, but nothing really takes the pain away.",
+      "state": "AVAILABLE"
+    },
+    "associated_symptoms": {
+      "nausea": {
+        "value": true,
+        "state": "AVAILABLE"
+      },
+      "vomiting": {
+        "value": true,
+        "state": "AVAILABLE"
+      },
+      "fever": {
+        "value": true,
+        "state": "AVAILABLE"
+      },
+      "anorexia": {
+        "value": true,
+        "state": "AVAILABLE"
+      },
+      "shortness_of_breath": {
+        "value": false,
+        "state": "AVAILABLE"
+      },
+      "sweating": {
+        "value": false,
+        "state": "AVAILABLE"
+      },
+      "body_aches": {
+        "value": null,
+        "state": "UNKNOWN"
+      },
+      "diarrhea": {
+        "value": false,
+        "state": "AVAILABLE"
+      },
+      "headache": {
+        "value": null,
+        "state": "UNKNOWN"
+      },
+      "urinary": {
+        "value": false,
+        "state": "AVAILABLE"
+      }
+    },
+    "pertinent_negatives": [
+      "No dysuria, hematuria, or flank pain",
+      "No diarrhea or bloody stools",
+      "No prior abdominal surgeries"
+    ]
+  },
+  "past_medical_history": [
+    "No chronic medical conditions"
+  ],
+  "medications": [
+    "None. Took 500 mg acetaminophen 3 hours ago with no relief"
+  ],
+  "allergies": [
+    "No known drug allergies (NKDA)"
+  ],
+  "family_history": "No significant medical issues in immediate family.",
+  "social_history": "Non-smoker, drinks socially on weekends, no illicit substances.",
+  "examination": [
+    {
+      "id": "exam-mcburney",
+      "system": "Abdominal",
+      "name": "Focused Abdominal Palpation & Peritoneal Maneuvers",
+      "findingDescription": "Marked focal tenderness at McBurney's point with involuntary guarding. Positive Rovsing sign (RLQ pain on LLQ palpation). Positive Psoas sign on passive right hip extension.",
+      "isAbnormal": true,
+      "clinicalSignificance": "Classic peritoneal signs of acute localized appendicitis."
+    },
+    {
+      "id": "exam-general-abd",
+      "system": "General",
+      "name": "General Physical Appearance",
+      "findingDescription": "Patient lies still with right hip slightly flexed to reduce peritoneal tension. Mild low-grade flushing.",
+      "isAbnormal": true,
+      "clinicalSignificance": "Peritoneal posturing."
+    }
+  ],
+  "investigations": [
+    {
+      "id": "inv-us-appendix",
+      "name": "Abdominal Ultrasound (Right Lower Quadrant)",
+      "category": "Imaging",
+      "turnaroundMinutes": 30,
+      "result": "Non-compressible, blind-ending tubular structure measuring 8.2 mm in diameter with periappendiceal fluid",
+      "unit": "mm",
+      "reference_range": "< 6 mm compressible",
+      "interpretation": "Sonographic evidence of acute non-perforated appendicitis.",
+      "is_available": true
+    },
+    {
+      "id": "inv-cbc",
+      "name": "Complete Blood Count (CBC with differential)",
+      "category": "Laboratory",
+      "turnaroundMinutes": 20,
+      "result": "WBC 14.8 x10^9/L (Leukocytosis with 84% neutrophils / left shift)",
+      "unit": "x10^9/L",
+      "reference_range": "4.5 - 11.0 x10^9/L",
+      "interpretation": "Elevated white cell count indicating acute inflammatory response.",
+      "is_available": true
+    }
+  ],
+  "diagnosis_model": {
+    "primary_diagnosis": "Acute Appendicitis",
+    "primary_diagnosis_id": "dx-appendicitis",
+    "differentials": [
+      {
+        "id": "dx-appendicitis",
+        "name": "Acute Appendicitis",
+        "is_correct": true
+      },
+      {
+        "id": "dx-mesenteric-adenitis",
+        "name": "Mesenteric Adenitis",
+        "is_correct": false
+      },
+      {
+        "id": "dx-gastroenteritis",
+        "name": "Acute Gastroenteritis",
+        "is_correct": false
+      },
+      {
+        "id": "dx-nephrolithiasis",
+        "name": "Right Ureteral Calculus / Nephrolithiasis",
+        "is_correct": false
+      }
+    ]
+  },
+  "management_model": {
+    "immediate_actions": [
+      "Keep patient NPO (Nil Per Os) immediately",
+      "Request Urgent General Surgery Consultation for Appendectomy",
+      "Initiate IV fluid resuscitation (Normal Saline or Ringer's Lactate)",
+      "Administer broad-spectrum perioperative IV Antibiotics (Ceftriaxone + Metronidazole)"
+    ],
+    "contraindicated_actions": [
+      "Oral food or liquid ingestion",
+      "Cathartics or enemas (risk of appendiceal perforation)"
+    ]
+  },
+  "scoring_rubric": {
+    "high_value_questions": [
+      "Pain migration from periumbilical to RLQ",
+      "Anorexia presence (loss of appetite)",
+      "Nausea and vomiting sequence",
+      "Aggravation with coughing/movement (peritoneal irritation)",
+      "Absence of urinary symptoms"
+    ],
+    "red_flags": [
+      "Migration pattern",
+      "Rebound tenderness / Rovsing sign",
+      "Fever and leukocytosis"
+    ],
+    "critical_actions": [
+      "Elicit McBurney's point tenderness and Rovsing/Psoas sign",
+      "Place on strict NPO status",
+      "Request urgent surgical consultation",
+      "Order ultrasound or CT abdomen and CBC"
+    ]
+  }
+}

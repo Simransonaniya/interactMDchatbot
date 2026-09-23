@@ -1,0 +1,240 @@
+{
+  "case_id": "dyspnea_002",
+  "id": "dyspnea_002",
+  "version": 1,
+  "title": "Acute Severe Dyspnea & Wheezing",
+  "specialty": "Pulmonology",
+  "presentation": "Shortness of Breath",
+  "difficulty": "Novice",
+  "status": "published",
+  "is_published": true,
+  "learning_objectives": [
+    "Evaluate acute asthma exacerbation severity",
+    "Screen for respiratory muscle fatigue and accessory muscle use",
+    "Measure peak expiratory flow rate",
+    "Administer back-to-back inhaled bronchodilators and systemic corticosteroids"
+  ],
+  "patient": {
+    "name": "Elena Rostova",
+    "age": 32,
+    "sex": "female",
+    "gender": "Female",
+    "occupation": "elementary school teacher",
+    "persona": {
+      "personality": "anxious",
+      "communication_style": "ordinary_patient",
+      "emotional_state": "frightened"
+    },
+    "opening_statement": "Doctor... I can't... breathe... Used my blue inhaler... four times... still tight...",
+    "initial_statement": "Doctor... I can't... breathe... Used my blue inhaler... four times... still tight...",
+    "presentation_complaint": "I can barely catch my breath... My inhaler isn't working.",
+    "initial_vitals": {
+      "heart_rate": 112,
+      "blood_pressure": "128/82",
+      "respiratory_rate": 28,
+      "oxygen_saturation": 91,
+      "temperature": 36.8,
+      "pain_score": 4
+    }
+  },
+  "history": {
+    "chief_complaint": {
+      "value": "I started having severe trouble catching my breath, and my blue inhaler isn't working.",
+      "state": "AVAILABLE"
+    },
+    "onset_timing": {
+      "value": "About 3 hours ago.",
+      "state": "AVAILABLE"
+    },
+    "onset_activity": {
+      "value": "I was visiting a friend who has two cats.",
+      "state": "AVAILABLE"
+    },
+    "location": {
+      "value": "All over my chest.",
+      "state": "AVAILABLE"
+    },
+    "character": {
+      "value": "It feels like breathing through a thin straw, with a tight band squeezing my chest.",
+      "state": "AVAILABLE"
+    },
+    "severity": {
+      "value": "It's about an 8 out of 10 difficulty breathing.",
+      "state": "AVAILABLE"
+    },
+    "radiation": {
+      "value": "No, it stays right where it is. It hasn't spread anywhere else.",
+      "state": "AVAILABLE"
+    },
+    "timing": {
+      "value": "It hasn't really gone away and has gotten worse.",
+      "state": "AVAILABLE"
+    },
+    "aggravating_factors": {
+      "value": "Any physical activity or breathing in cold air makes it much worse.",
+      "state": "AVAILABLE"
+    },
+    "relieving_factors": {
+      "value": "My inhaler gave only about ten minutes of slight relief before the tightness came right back.",
+      "state": "AVAILABLE"
+    },
+    "associated_symptoms": {
+      "shortness_of_breath": {
+        "value": true,
+        "state": "AVAILABLE"
+      },
+      "wheezing": {
+        "value": true,
+        "state": "AVAILABLE"
+      },
+      "cough": {
+        "value": true,
+        "state": "AVAILABLE"
+      },
+      "sweating": {
+        "value": false,
+        "state": "AVAILABLE"
+      },
+      "nausea": {
+        "value": false,
+        "state": "AVAILABLE"
+      },
+      "fever": {
+        "value": false,
+        "state": "AVAILABLE"
+      },
+      "body_aches": {
+        "value": null,
+        "state": "UNKNOWN"
+      },
+      "diarrhea": {
+        "value": null,
+        "state": "UNKNOWN"
+      },
+      "headache": {
+        "value": null,
+        "state": "UNKNOWN"
+      }
+    },
+    "pertinent_negatives": [
+      "No fever, chills, or purulent sputum",
+      "No unilateral pleuritic chest pain",
+      "No leg swelling or prior DVT",
+      "No facial angioedema or hives"
+    ]
+  },
+  "past_medical_history": [
+    "Moderate persistent asthma diagnosed at age 11",
+    "Cat dander and grass pollen allergy",
+    "One prior ICU admission for asthma at age 19"
+  ],
+  "medications": [
+    "Albuterol 90 mcg HFA inhaler as needed",
+    "Fluticasone/Salmeterol 100/50 mcg DPI daily (poor compliance)"
+  ],
+  "allergies": [
+    "Cat dander",
+    "Grass pollen",
+    "Aspirin triggers wheezing"
+  ],
+  "family_history": "Mother has asthma; Brother had severe eczema growing up.",
+  "social_history": "Never smoked, denies vaping or illicit substances.",
+  "examination": [
+    {
+      "id": "exam-pulm-wheeze",
+      "system": "Respiratory",
+      "name": "Pulmonary Auscultation & Work of Breathing",
+      "findingDescription": "Markedly prolonged expiratory phase. High-pitched polyphonic expiratory wheezes throughout all lung fields. Supraclavicular and intercostal retractions present.",
+      "isAbnormal": true,
+      "clinicalSignificance": "Severe diffuse bronchospasm with significant airflow limitation."
+    },
+    {
+      "id": "exam-cv",
+      "system": "Cardiovascular",
+      "name": "Precordial Auscultation",
+      "findingDescription": "Tachycardic regular rhythm at 112 bpm. Normal S1/S2. No murmurs or gallops.",
+      "isAbnormal": true,
+      "clinicalSignificance": "Sinus tachycardia secondary to respiratory distress and albuterol use."
+    }
+  ],
+  "investigations": [
+    {
+      "id": "inv-peak-flow",
+      "name": "Peak Expiratory Flow (PEF)",
+      "category": "Point-of-Care",
+      "turnaroundMinutes": 1,
+      "result": "190 L/min (42% of personal best 450 L/min)",
+      "unit": "L/min",
+      "reference_range": "> 80% predicted (360+ L/min)",
+      "interpretation": "Severe exacerbation (Red Zone < 50% predicted).",
+      "is_available": true
+    },
+    {
+      "id": "inv-cxr-asthma",
+      "name": "Chest Radiograph (CXR)",
+      "category": "Imaging",
+      "turnaroundMinutes": 15,
+      "result": "Hyperinflation with flattened diaphragms; no focal consolidation or pneumothorax",
+      "unit": "",
+      "reference_range": "Normal",
+      "interpretation": "Hyperinflation consistent with acute air trapping.",
+      "is_available": true
+    }
+  ],
+  "diagnosis_model": {
+    "primary_diagnosis": "Severe Acute Asthma Exacerbation",
+    "primary_diagnosis_id": "dx-asthma",
+    "differentials": [
+      {
+        "id": "dx-asthma",
+        "name": "Severe Acute Asthma Exacerbation",
+        "is_correct": true
+      },
+      {
+        "id": "dx-anaphylaxis",
+        "name": "Anaphylaxis with Respiratory Manifestations",
+        "is_correct": false
+      },
+      {
+        "id": "dx-pneumothorax",
+        "name": "Spontaneous Pneumothorax",
+        "is_correct": false
+      },
+      {
+        "id": "dx-pe",
+        "name": "Pulmonary Embolism",
+        "is_correct": false
+      }
+    ]
+  },
+  "management_model": {
+    "immediate_actions": [
+      "Inhaled Albuterol + Ipratropium bromide nebulization back-to-back x 3",
+      "Oral Prednisone 60 mg or IV Methylprednisolone 60 mg STAT",
+      "Supplemental oxygen to maintain SpO2 >= 93-95%"
+    ],
+    "contraindicated_actions": [
+      "Sedatives or anxiolytics (risk of respiratory depression)",
+      "Aspirin or non-selective beta-blockers"
+    ]
+  },
+  "scoring_rubric": {
+    "high_value_questions": [
+      "Onset and duration of attack",
+      "Trigger exposure (cats/allergens)",
+      "Inhaler use and response",
+      "Previous intubation or ICU history",
+      "Aspirin sensitivity history"
+    ],
+    "red_flags": [
+      "Inability to speak in full sentences",
+      "Accessory muscle retractions",
+      "Peak flow in red zone (<50%)"
+    ],
+    "critical_actions": [
+      "Perform peak flow measurement",
+      "Deliver nebulized short-acting beta agonist + anticholinergic",
+      "Administer systemic corticosteroids STAT"
+    ]
+  }
+}

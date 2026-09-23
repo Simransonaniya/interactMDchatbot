@@ -1,0 +1,757 @@
+[
+  {
+    "case_id": "chest_pain_001",
+    "id": "chest_pain_001",
+    "version": 1,
+    "title": "Acute Retrosternal Chest Pain",
+    "specialty": "Cardiology",
+    "presentation": "Chest Pain",
+    "difficulty": "Intermediate",
+    "status": "published",
+    "is_published": true,
+    "learning_objectives": [
+      "Perform targeted OPQRST history for acute chest pain",
+      "Screen for high-risk red flags including radiation and autonomic signs",
+      "Identify acute myocardial infarction on STAT 12-lead ECG",
+      "Initiate immediate dual antiplatelet therapy and emergent catheterization activation"
+    ],
+    "patient": {
+      "name": "Robert Chen",
+      "age": 58,
+      "sex": "male",
+      "gender": "Male",
+      "occupation": "architectural project manager",
+      "persona": {
+        "personality": "anxious",
+        "communication_style": "ordinary_patient",
+        "emotional_state": "worried"
+      },
+      "opening_statement": "Doctor, please... It feels like an elephant is sitting right in the middle of my chest. I started feeling dizzy and breaking out in a cold sweat on my way into the office.",
+      "initial_statement": "Doctor, please... It feels like an elephant is sitting right in the middle of my chest. I started feeling dizzy and breaking out in a cold sweat on my way into the office.",
+      "presentation_complaint": "Severe pressure and heaviness in my chest that started less than an hour ago.",
+      "initial_vitals": {
+        "heart_rate": 98,
+        "blood_pressure": "154/94",
+        "respiratory_rate": 20,
+        "oxygen_saturation": 97,
+        "temperature": 37.1,
+        "pain_score": 8
+      }
+    },
+    "history": {
+      "chief_complaint": {
+        "value": "I started having this really heavy pressure in my chest.",
+        "state": "AVAILABLE"
+      },
+      "onset_timing": {
+        "value": "About 45 minutes ago.",
+        "state": "AVAILABLE"
+      },
+      "onset_activity": {
+        "value": "I was walking up two flights of stairs to my office.",
+        "state": "AVAILABLE"
+      },
+      "location": {
+        "value": "Right in the middle of my chest.",
+        "state": "AVAILABLE"
+      },
+      "character": {
+        "value": "It feels like a deep, heavy crushing pressure, like someone is squeezing my chest in a vice.",
+        "state": "AVAILABLE"
+      },
+      "severity": {
+        "value": "About an 8 out of 10 right now.",
+        "state": "AVAILABLE"
+      },
+      "radiation": {
+        "value": "Yes, it goes into my left jaw and down my left arm.",
+        "state": "AVAILABLE"
+      },
+      "timing": {
+        "value": "It hasn't really gone away.",
+        "state": "AVAILABLE"
+      },
+      "aggravating_factors": {
+        "value": "Moving around or minimal exertion makes it noticeably worse.",
+        "state": "AVAILABLE"
+      },
+      "relieving_factors": {
+        "value": "Nothing really makes it better. Even stopping and resting in my chair did not relieve it at all.",
+        "state": "AVAILABLE"
+      },
+      "associated_symptoms": {
+        "shortness_of_breath": {
+          "value": true,
+          "state": "AVAILABLE"
+        },
+        "sweating": {
+          "value": true,
+          "state": "AVAILABLE"
+        },
+        "dizziness": {
+          "value": true,
+          "state": "AVAILABLE"
+        },
+        "nausea": {
+          "value": true,
+          "state": "AVAILABLE"
+        },
+        "vomiting": {
+          "value": false,
+          "state": "AVAILABLE"
+        },
+        "fever": {
+          "value": false,
+          "state": "AVAILABLE"
+        },
+        "body_aches": {
+          "value": null,
+          "state": "UNKNOWN"
+        },
+        "cough": {
+          "value": false,
+          "state": "AVAILABLE"
+        },
+        "diarrhea": {
+          "value": null,
+          "state": "UNKNOWN"
+        },
+        "headache": {
+          "value": null,
+          "state": "UNKNOWN"
+        },
+        "urinary": {
+          "value": null,
+          "state": "UNKNOWN"
+        }
+      },
+      "pertinent_negatives": [
+        "No pleuritic sharp pain on deep inspiration",
+        "No tearing pain between shoulder blades",
+        "No fever or chills",
+        "No prior heart attack"
+      ]
+    },
+    "past_medical_history": [
+      "Essential hypertension (6 years)",
+      "Hyperlipidemia (elevated LDL)",
+      "No prior myocardial infarction"
+    ],
+    "medications": [
+      "Amlodipine 5 mg daily",
+      "Atorvastatin 20 mg daily (frequently misses doses)"
+    ],
+    "allergies": [
+      "No known drug allergies (NKDA)"
+    ],
+    "family_history": "Father had a fatal heart attack at age 52; Mother has type 2 diabetes.",
+    "social_history": "Smokes 0.5 packs per day for 25 years. Drinks 1-2 glasses of wine on weekends. No illicit substances.",
+    "examination": [
+      {
+        "id": "exam-cv",
+        "system": "Cardiovascular",
+        "name": "Cardiovascular Examination & Auscultation",
+        "findingDescription": "Regular tachycardia at 98 bpm. S1/S2 present. Soft S4 gallop audible at apex. JVP 3 cm above sternal angle at 45 degrees. Peripheral pulses equal bilaterally.",
+        "isAbnormal": true,
+        "clinicalSignificance": "S4 gallop indicates reduced LV compliance from acute myocardial ischemia."
+      },
+      {
+        "id": "exam-pulm",
+        "system": "Respiratory",
+        "name": "Pulmonary Auscultation & Chest Wall Palpation",
+        "findingDescription": "Clear breath sounds bilaterally. No wheezes, crackles, or rhonchi. No chest wall tenderness to palpation.",
+        "isAbnormal": false,
+        "clinicalSignificance": "Absence of chest wall tenderness rules out costochondritis; clear lungs exclude acute pulmonary edema."
+      },
+      {
+        "id": "exam-general",
+        "system": "General",
+        "name": "General Appearance & Diaphoresis",
+        "findingDescription": "Cool, clammy extremities with marked forehead and palmar diaphoresis. Capillary refill 2.5 seconds.",
+        "isAbnormal": true,
+        "clinicalSignificance": "Intense autonomic sympathetic discharge in acute coronary syndrome."
+      },
+      {
+        "id": "exam-abdomen",
+        "system": "Abdominal",
+        "name": "Abdominal Examination",
+        "findingDescription": "Soft, non-tender, non-distended. No guarding, rebound, or palpable pulsatile mass.",
+        "isAbnormal": false,
+        "clinicalSignificance": "Excludes acute abdominal pathology."
+      }
+    ],
+    "investigations": [
+      {
+        "id": "inv-ecg",
+        "name": "12-Lead Electrocardiogram (STAT)",
+        "category": "Cardiology / Point-of-Care",
+        "turnaroundMinutes": 2,
+        "result": "ST Elevation in II, III, aVF (Inferior STEMI)",
+        "unit": "mm",
+        "reference_range": "Normal sinus rhythm",
+        "interpretation": "Sinus rhythm at 96 bpm. 2.5 mm ST-segment elevation in leads II, III, aVF with reciprocal ST depression in leads I and aVL.",
+        "is_available": true
+      },
+      {
+        "id": "inv-troponin",
+        "name": "High-Sensitivity Cardiac Troponin I (hs-cTnI)",
+        "category": "Laboratory",
+        "turnaroundMinutes": 20,
+        "result": "185 ng/L (Markedly Elevated)",
+        "unit": "ng/L",
+        "reference_range": "< 14 ng/L",
+        "interpretation": "Positive for acute myocardial necrosis.",
+        "is_available": true
+      },
+      {
+        "id": "inv-cxr",
+        "name": "Portable Chest Radiograph (CXR)",
+        "category": "Imaging",
+        "turnaroundMinutes": 15,
+        "result": "Normal cardiothoracic ratio, clear fields, no mediastinal widening",
+        "unit": "",
+        "reference_range": "Normal",
+        "interpretation": "Normal mediastinum and lung fields.",
+        "is_available": true
+      }
+    ],
+    "diagnosis_model": {
+      "primary_diagnosis": "Acute ST-Elevation Myocardial Infarction (Inferior STEMI)",
+      "primary_diagnosis_id": "dx-stemi",
+      "differentials": [
+        {
+          "id": "dx-stemi",
+          "name": "ST-Elevation Myocardial Infarction (Inferior STEMI)",
+          "is_correct": true
+        },
+        {
+          "id": "dx-dissection",
+          "name": "Acute Aortic Dissection",
+          "is_correct": false
+        },
+        {
+          "id": "dx-pe",
+          "name": "Pulmonary Embolism",
+          "is_correct": false
+        },
+        {
+          "id": "dx-gerd",
+          "name": "Gastroesophageal Reflux Disease / Esophageal Spasm",
+          "is_correct": false
+        }
+      ]
+    },
+    "management_model": {
+      "immediate_actions": [
+        "Administer chewable Aspirin 324 mg STAT",
+        "Activate Cardiac Catheterization Lab for Emergent Primary PCI",
+        "Initiate IV Unfractionated Heparin bolus and infusion",
+        "Provide sublingual nitroglycerin (if systolic BP > 100 mmHg and no RV infarction)"
+      ],
+      "contraindicated_actions": [
+        "High-dose NSAIDs (Ibuprofen/Ketorolac)",
+        "Discharging patient home"
+      ]
+    },
+    "scoring_rubric": {
+      "high_value_questions": [
+        "Onset and timing",
+        "Pain character and quality",
+        "Radiation to jaw or left arm",
+        "Associated diaphoresis and nausea",
+        "Past medical history and cardiac risk factors"
+      ],
+      "red_flags": [
+        "Radiation to jaw/arm",
+        "Autonomic diaphoresis",
+        "Exclusion of tearing dissection pain"
+      ],
+      "critical_actions": [
+        "Order STAT 12-lead ECG",
+        "Administer chewable Aspirin 324 mg",
+        "Activate emergent PCI",
+        "Order cardiac troponin"
+      ]
+    }
+  },
+  {
+    "case_id": "dyspnea_002",
+    "id": "dyspnea_002",
+    "version": 1,
+    "title": "Acute Severe Dyspnea & Wheezing",
+    "specialty": "Pulmonology",
+    "presentation": "Shortness of Breath",
+    "difficulty": "Novice",
+    "status": "published",
+    "is_published": true,
+    "learning_objectives": [
+      "Evaluate acute asthma exacerbation severity",
+      "Screen for respiratory muscle fatigue and accessory muscle use",
+      "Measure peak expiratory flow rate",
+      "Administer back-to-back inhaled bronchodilators and systemic corticosteroids"
+    ],
+    "patient": {
+      "name": "Elena Rostova",
+      "age": 32,
+      "sex": "female",
+      "gender": "Female",
+      "occupation": "elementary school teacher",
+      "persona": {
+        "personality": "anxious",
+        "communication_style": "ordinary_patient",
+        "emotional_state": "frightened"
+      },
+      "opening_statement": "Doctor... I can't... breathe... Used my blue inhaler... four times... still tight...",
+      "initial_statement": "Doctor... I can't... breathe... Used my blue inhaler... four times... still tight...",
+      "presentation_complaint": "I can barely catch my breath... My inhaler isn't working.",
+      "initial_vitals": {
+        "heart_rate": 112,
+        "blood_pressure": "128/82",
+        "respiratory_rate": 28,
+        "oxygen_saturation": 91,
+        "temperature": 36.8,
+        "pain_score": 4
+      }
+    },
+    "history": {
+      "chief_complaint": {
+        "value": "I started having severe trouble catching my breath, and my blue inhaler isn't working.",
+        "state": "AVAILABLE"
+      },
+      "onset_timing": {
+        "value": "About 3 hours ago.",
+        "state": "AVAILABLE"
+      },
+      "onset_activity": {
+        "value": "I was visiting a friend who has two cats.",
+        "state": "AVAILABLE"
+      },
+      "location": {
+        "value": "All over my chest.",
+        "state": "AVAILABLE"
+      },
+      "character": {
+        "value": "It feels like breathing through a thin straw, with a tight band squeezing my chest.",
+        "state": "AVAILABLE"
+      },
+      "severity": {
+        "value": "It's about an 8 out of 10 difficulty breathing.",
+        "state": "AVAILABLE"
+      },
+      "radiation": {
+        "value": "No, it stays right where it is. It hasn't spread anywhere else.",
+        "state": "AVAILABLE"
+      },
+      "timing": {
+        "value": "It hasn't really gone away and has gotten worse.",
+        "state": "AVAILABLE"
+      },
+      "aggravating_factors": {
+        "value": "Any physical activity or breathing in cold air makes it much worse.",
+        "state": "AVAILABLE"
+      },
+      "relieving_factors": {
+        "value": "My inhaler gave only about ten minutes of slight relief before the tightness came right back.",
+        "state": "AVAILABLE"
+      },
+      "associated_symptoms": {
+        "shortness_of_breath": {
+          "value": true,
+          "state": "AVAILABLE"
+        },
+        "wheezing": {
+          "value": true,
+          "state": "AVAILABLE"
+        },
+        "cough": {
+          "value": true,
+          "state": "AVAILABLE"
+        },
+        "sweating": {
+          "value": false,
+          "state": "AVAILABLE"
+        },
+        "nausea": {
+          "value": false,
+          "state": "AVAILABLE"
+        },
+        "fever": {
+          "value": false,
+          "state": "AVAILABLE"
+        },
+        "body_aches": {
+          "value": null,
+          "state": "UNKNOWN"
+        },
+        "diarrhea": {
+          "value": null,
+          "state": "UNKNOWN"
+        },
+        "headache": {
+          "value": null,
+          "state": "UNKNOWN"
+        }
+      },
+      "pertinent_negatives": [
+        "No fever, chills, or purulent sputum",
+        "No unilateral pleuritic chest pain",
+        "No leg swelling or prior DVT",
+        "No facial angioedema or hives"
+      ]
+    },
+    "past_medical_history": [
+      "Moderate persistent asthma diagnosed at age 11",
+      "Cat dander and grass pollen allergy",
+      "One prior ICU admission for asthma at age 19"
+    ],
+    "medications": [
+      "Albuterol 90 mcg HFA inhaler as needed",
+      "Fluticasone/Salmeterol 100/50 mcg DPI daily (poor compliance)"
+    ],
+    "allergies": [
+      "Cat dander",
+      "Grass pollen",
+      "Aspirin triggers wheezing"
+    ],
+    "family_history": "Mother has asthma; Brother had severe eczema growing up.",
+    "social_history": "Never smoked, denies vaping or illicit substances.",
+    "examination": [
+      {
+        "id": "exam-pulm-wheeze",
+        "system": "Respiratory",
+        "name": "Pulmonary Auscultation & Work of Breathing",
+        "findingDescription": "Markedly prolonged expiratory phase. High-pitched polyphonic expiratory wheezes throughout all lung fields. Supraclavicular and intercostal retractions present.",
+        "isAbnormal": true,
+        "clinicalSignificance": "Severe diffuse bronchospasm with significant airflow limitation."
+      },
+      {
+        "id": "exam-cv",
+        "system": "Cardiovascular",
+        "name": "Precordial Auscultation",
+        "findingDescription": "Tachycardic regular rhythm at 112 bpm. Normal S1/S2. No murmurs or gallops.",
+        "isAbnormal": true,
+        "clinicalSignificance": "Sinus tachycardia secondary to respiratory distress and albuterol use."
+      }
+    ],
+    "investigations": [
+      {
+        "id": "inv-peak-flow",
+        "name": "Peak Expiratory Flow (PEF)",
+        "category": "Point-of-Care",
+        "turnaroundMinutes": 1,
+        "result": "190 L/min (42% of personal best 450 L/min)",
+        "unit": "L/min",
+        "reference_range": "> 80% predicted (360+ L/min)",
+        "interpretation": "Severe exacerbation (Red Zone < 50% predicted).",
+        "is_available": true
+      },
+      {
+        "id": "inv-cxr-asthma",
+        "name": "Chest Radiograph (CXR)",
+        "category": "Imaging",
+        "turnaroundMinutes": 15,
+        "result": "Hyperinflation with flattened diaphragms; no focal consolidation or pneumothorax",
+        "unit": "",
+        "reference_range": "Normal",
+        "interpretation": "Hyperinflation consistent with acute air trapping.",
+        "is_available": true
+      }
+    ],
+    "diagnosis_model": {
+      "primary_diagnosis": "Severe Acute Asthma Exacerbation",
+      "primary_diagnosis_id": "dx-asthma",
+      "differentials": [
+        {
+          "id": "dx-asthma",
+          "name": "Severe Acute Asthma Exacerbation",
+          "is_correct": true
+        },
+        {
+          "id": "dx-anaphylaxis",
+          "name": "Anaphylaxis with Respiratory Manifestations",
+          "is_correct": false
+        },
+        {
+          "id": "dx-pneumothorax",
+          "name": "Spontaneous Pneumothorax",
+          "is_correct": false
+        },
+        {
+          "id": "dx-pe",
+          "name": "Pulmonary Embolism",
+          "is_correct": false
+        }
+      ]
+    },
+    "management_model": {
+      "immediate_actions": [
+        "Inhaled Albuterol + Ipratropium bromide nebulization back-to-back x 3",
+        "Oral Prednisone 60 mg or IV Methylprednisolone 60 mg STAT",
+        "Supplemental oxygen to maintain SpO2 >= 93-95%"
+      ],
+      "contraindicated_actions": [
+        "Sedatives or anxiolytics (risk of respiratory depression)",
+        "Aspirin or non-selective beta-blockers"
+      ]
+    },
+    "scoring_rubric": {
+      "high_value_questions": [
+        "Onset and duration of attack",
+        "Trigger exposure (cats/allergens)",
+        "Inhaler use and response",
+        "Previous intubation or ICU history",
+        "Aspirin sensitivity history"
+      ],
+      "red_flags": [
+        "Inability to speak in full sentences",
+        "Accessory muscle retractions",
+        "Peak flow in red zone (<50%)"
+      ],
+      "critical_actions": [
+        "Perform peak flow measurement",
+        "Deliver nebulized short-acting beta agonist + anticholinergic",
+        "Administer systemic corticosteroids STAT"
+      ]
+    }
+  },
+  {
+    "case_id": "abdominal_pain_003",
+    "id": "abdominal_pain_003",
+    "version": 1,
+    "title": "Migratory Right Lower Quadrant Abdominal Pain",
+    "specialty": "Gastroenterology / Surgery",
+    "presentation": "Abdominal Pain",
+    "difficulty": "Novice",
+    "status": "published",
+    "is_published": true,
+    "learning_objectives": [
+      "Trace classic visceral-to-somatic pain migration in acute abdomen",
+      "Elicit peritoneal signs (McBurney tenderness, Rovsing, Psoas sign)",
+      "Order targeted abdominal ultrasound/CT imaging and inflammatory labs",
+      "Keep patient NPO and obtain urgent surgical consultation"
+    ],
+    "patient": {
+      "name": "Marcus Vance",
+      "age": 24,
+      "sex": "male",
+      "gender": "Male",
+      "occupation": "software engineer",
+      "persona": {
+        "personality": "guarded",
+        "communication_style": "ordinary_patient",
+        "emotional_state": "distressed"
+      },
+      "opening_statement": "Doc, every bump in the road on the way here was pure agony. It started near my navel but now it's focused low down on the right side.",
+      "initial_statement": "Doc, every bump in the road on the way here was pure agony. It started near my navel but now it's focused low down on the right side.",
+      "presentation_complaint": "My stomach started hurting around my belly button yesterday, but now it has moved down to the right side and hurts when I walk.",
+      "initial_vitals": {
+        "heart_rate": 88,
+        "blood_pressure": "122/76",
+        "respiratory_rate": 16,
+        "oxygen_saturation": 99,
+        "temperature": 37.9,
+        "pain_score": 7
+      }
+    },
+    "history": {
+      "chief_complaint": {
+        "value": "My stomach started hurting around my belly button yesterday, and now it has moved down to my lower right side.",
+        "state": "AVAILABLE"
+      },
+      "onset_timing": {
+        "value": "It started yesterday evening, around 7 PM.",
+        "state": "AVAILABLE"
+      },
+      "onset_activity": {
+        "value": "I was just relaxing at home yesterday evening.",
+        "state": "AVAILABLE"
+      },
+      "location": {
+        "value": "Low down on the right side of my stomach.",
+        "state": "AVAILABLE"
+      },
+      "character": {
+        "value": "It started as a dull ache around my navel, but now it's a sharp, constant pain low down on my right side.",
+        "state": "AVAILABLE"
+      },
+      "severity": {
+        "value": "It's about a 7 right now.",
+        "state": "AVAILABLE"
+      },
+      "radiation": {
+        "value": "It moved from around my belly button down to the lower right side of my stomach.",
+        "state": "AVAILABLE"
+      },
+      "timing": {
+        "value": "Yes, it hasn't really gone away.",
+        "state": "AVAILABLE"
+      },
+      "aggravating_factors": {
+        "value": "Coughing, walking, or any bumps make the pain much sharper.",
+        "state": "AVAILABLE"
+      },
+      "relieving_factors": {
+        "value": "Lying completely still helps a little, but nothing really takes the pain away.",
+        "state": "AVAILABLE"
+      },
+      "associated_symptoms": {
+        "nausea": {
+          "value": true,
+          "state": "AVAILABLE"
+        },
+        "vomiting": {
+          "value": true,
+          "state": "AVAILABLE"
+        },
+        "fever": {
+          "value": true,
+          "state": "AVAILABLE"
+        },
+        "anorexia": {
+          "value": true,
+          "state": "AVAILABLE"
+        },
+        "shortness_of_breath": {
+          "value": false,
+          "state": "AVAILABLE"
+        },
+        "sweating": {
+          "value": false,
+          "state": "AVAILABLE"
+        },
+        "body_aches": {
+          "value": null,
+          "state": "UNKNOWN"
+        },
+        "diarrhea": {
+          "value": false,
+          "state": "AVAILABLE"
+        },
+        "headache": {
+          "value": null,
+          "state": "UNKNOWN"
+        },
+        "urinary": {
+          "value": false,
+          "state": "AVAILABLE"
+        }
+      },
+      "pertinent_negatives": [
+        "No dysuria, hematuria, or flank pain",
+        "No diarrhea or bloody stools",
+        "No prior abdominal surgeries"
+      ]
+    },
+    "past_medical_history": [
+      "No chronic medical conditions"
+    ],
+    "medications": [
+      "None. Took 500 mg acetaminophen 3 hours ago with no relief"
+    ],
+    "allergies": [
+      "No known drug allergies (NKDA)"
+    ],
+    "family_history": "No significant medical issues in immediate family.",
+    "social_history": "Non-smoker, drinks socially on weekends, no illicit substances.",
+    "examination": [
+      {
+        "id": "exam-mcburney",
+        "system": "Abdominal",
+        "name": "Focused Abdominal Palpation & Peritoneal Maneuvers",
+        "findingDescription": "Marked focal tenderness at McBurney's point with involuntary guarding. Positive Rovsing sign (RLQ pain on LLQ palpation). Positive Psoas sign on passive right hip extension.",
+        "isAbnormal": true,
+        "clinicalSignificance": "Classic peritoneal signs of acute localized appendicitis."
+      },
+      {
+        "id": "exam-general-abd",
+        "system": "General",
+        "name": "General Physical Appearance",
+        "findingDescription": "Patient lies still with right hip slightly flexed to reduce peritoneal tension. Mild low-grade flushing.",
+        "isAbnormal": true,
+        "clinicalSignificance": "Peritoneal posturing."
+      }
+    ],
+    "investigations": [
+      {
+        "id": "inv-us-appendix",
+        "name": "Abdominal Ultrasound (Right Lower Quadrant)",
+        "category": "Imaging",
+        "turnaroundMinutes": 30,
+        "result": "Non-compressible, blind-ending tubular structure measuring 8.2 mm in diameter with periappendiceal fluid",
+        "unit": "mm",
+        "reference_range": "< 6 mm compressible",
+        "interpretation": "Sonographic evidence of acute non-perforated appendicitis.",
+        "is_available": true
+      },
+      {
+        "id": "inv-cbc",
+        "name": "Complete Blood Count (CBC with differential)",
+        "category": "Laboratory",
+        "turnaroundMinutes": 20,
+        "result": "WBC 14.8 x10^9/L (Leukocytosis with 84% neutrophils / left shift)",
+        "unit": "x10^9/L",
+        "reference_range": "4.5 - 11.0 x10^9/L",
+        "interpretation": "Elevated white cell count indicating acute inflammatory response.",
+        "is_available": true
+      }
+    ],
+    "diagnosis_model": {
+      "primary_diagnosis": "Acute Appendicitis",
+      "primary_diagnosis_id": "dx-appendicitis",
+      "differentials": [
+        {
+          "id": "dx-appendicitis",
+          "name": "Acute Appendicitis",
+          "is_correct": true
+        },
+        {
+          "id": "dx-mesenteric-adenitis",
+          "name": "Mesenteric Adenitis",
+          "is_correct": false
+        },
+        {
+          "id": "dx-gastroenteritis",
+          "name": "Acute Gastroenteritis",
+          "is_correct": false
+        },
+        {
+          "id": "dx-nephrolithiasis",
+          "name": "Right Ureteral Calculus / Nephrolithiasis",
+          "is_correct": false
+        }
+      ]
+    },
+    "management_model": {
+      "immediate_actions": [
+        "Keep patient NPO (Nil Per Os) immediately",
+        "Request Urgent General Surgery Consultation for Appendectomy",
+        "Initiate IV fluid resuscitation (Normal Saline or Ringer's Lactate)",
+        "Administer broad-spectrum perioperative IV Antibiotics (Ceftriaxone + Metronidazole)"
+      ],
+      "contraindicated_actions": [
+        "Oral food or liquid ingestion",
+        "Cathartics or enemas (risk of appendiceal perforation)"
+      ]
+    },
+    "scoring_rubric": {
+      "high_value_questions": [
+        "Pain migration from periumbilical to RLQ",
+        "Anorexia presence (loss of appetite)",
+        "Nausea and vomiting sequence",
+        "Aggravation with coughing/movement (peritoneal irritation)",
+        "Absence of urinary symptoms"
+      ],
+      "red_flags": [
+        "Migration pattern",
+        "Rebound tenderness / Rovsing sign",
+        "Fever and leukocytosis"
+      ],
+      "critical_actions": [
+        "Elicit McBurney's point tenderness and Rovsing/Psoas sign",
+        "Place on strict NPO status",
+        "Request urgent surgical consultation",
+        "Order ultrasound or CT abdomen and CBC"
+      ]
+    }
+  }
+]

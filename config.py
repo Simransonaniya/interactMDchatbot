@@ -19,7 +19,9 @@ class Settings(BaseSettings):
     DEBUG: bool = True
 
     # Database
-    DATABASE_URL: str = "postgresql+psycopg://interactmd:interactmd@localhost:5432/interactmd"
+    DATABASE_URL: str = "sqlite:///./interactmd.db"
+    MONGODB_URI: str = ""
+    MONGODB_DB_NAME: str = "interactmd"
 
     # JWT
     JWT_SECRET_KEY: str = "CHANGE_THIS_SECRET_KEY_FOR_PRODUCTION_INTERACTMD_2026"
@@ -27,14 +29,22 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
     # CORS
-    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:5174"
+    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:5174,http://localhost:3000,http://127.0.0.1:5173"
 
     # LLM
-    LLM_PROVIDER: str = "mock"
+    LLM_PROVIDER: str = "huggingface"
     OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
     GROQ_API_KEY: str = ""
+    HUGGINGFACE_API_KEY: str = ""
+    HF_TOKEN: str = ""
+    HF_MODEL: str = "meta-llama/Llama-3.2-3B-Instruct"
+    HF_API_URL: str = ""
+    HF_TEMPERATURE: float = 0.2
+    HF_MAX_NEW_TOKENS: int = 150
+    HF_TOP_P: float = 0.9
+    HF_REPETITION_PENALTY: float = 1.1
 
     @property
     def cors_origins_list(self) -> list[str]:
@@ -51,3 +61,4 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
+

@@ -55,7 +55,9 @@ class PatientProfileSchema(BaseModel):
     age: int
     gender: str
     occupation: Optional[str] = None
-    persona: Optional[str] = None
+    persona: Optional[Any] = None
+    initial_statement: Optional[str] = None
+    avatar_url: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -121,7 +123,11 @@ class CaseSummary(BaseModel):
     patient_name: Optional[str] = None
     patient_age: Optional[int] = None
     patient_gender: Optional[str] = None
+    avatar_url: Optional[str] = None
     chief_complaint: Optional[str] = None
+    initial_statement: Optional[str] = None
+    tags: Optional[List[str]] = None
+    estimated_minutes: Optional[int] = 15
     created_at: datetime
 
     class Config:
@@ -135,8 +141,17 @@ class CaseDetail(BaseModel):
     difficulty: str
     is_published: bool
     patient: Optional[PatientProfileSchema] = None
+    avatar_url: Optional[str] = None
+    initial_statement: Optional[str] = None
+    tags: Optional[List[str]] = None
+    estimated_minutes: Optional[int] = 15
+    triage_nurse_note: Optional[str] = None
+    initial_vitals: Optional[Dict[str, Any]] = None
+    learning_objectives: Optional[List[str]] = None
     physical_findings: List[PhysicalFindingSchema] = []
     investigations: List[InvestigationSchema] = []
+    diagnosis_options: Optional[List[Dict[str, Any]]] = None
+    management_protocols: Optional[List[Dict[str, Any]]] = None
     created_at: datetime
 
     class Config:
@@ -249,22 +264,85 @@ class ChatRequest(BaseModel):
     conversation_history: List[HistoryMessage] = []
 
 class ChatResponse(BaseModel):
-    reply: str
-    empathy_detected: bool
-    category: str
-    provider: str
-    suggested_topics: List[str] = []
     session_id: Optional[str] = None
+    message: Optional[Dict[str, Any]] = None
+    reply: str
+    category: str
+    empathy_detected: bool = False
+    provider: str = "InteractMD AI Patient"
+    facts_revealed: List[str] = []
+    suggested_topics: List[str] = []
+    session_state: Optional[Dict[str, Any]] = None
 
 class ExamRequest(BaseModel):
-    case_id: str
+    case_id: Optional[str] = None
     exam_id: Optional[str] = None
     system: Optional[str] = None
 
-class InvestigationRequest(BaseModel):
-    case_id: str
-    test_id: str
+class ExamFindingItem(BaseModel):
+    id: str
+    system: str
+    name: str
+    findingDescription: str
+    isAbnormal: bool = False
+    clinicalSignificance: Optional[str] = None
 
+class ExamResponse(BaseModel):
+    session_id: Optional[str] = None
+    case_id: str
+    findings: List[ExamFindingItem] = []
+
+class InvestigationRequest(BaseModel):
+    case_id: Optional[str] = None
+    test_id: Optional[str] = None
+    test: Optional[str] = None
+
+class InvestigationResultItem(BaseModel):
+    id: str
+    name: str
+    category: str
+    result: str
+    unit: Optional[str] = ""
+    reference_range: Optional[str] = "Normal"
+    turnaroundMinutes: int = 15
+    is_available: bool = True
+    interpretation: Optional[str] = None
+
+class InvestigationResponse(BaseModel):
+    session_id: Optional[str] = None
+    case_id: str
+    test: str
+    turnaroundMinutes: int = 15
+    result: Dict[str, Any]
+
+class DiagnosisSubmissionRequest(BaseModel):
+    differential: List[str] = []
+    most_likely: str = ""
+    reasoning: Optional[str] = ""
+
+class DiagnosisSubmissionResponse(BaseModel):
+    session_id: str
+    case_id: str
+    status: str = "RECORDED"
+    differential: List[str]
+    most_likely: str
+    reasoning: Optional[str] = ""
+    is_correct_primary: Optional[bool] = None
+
+class ManagementSubmissionRequest(BaseModel):
+    immediate_actions: List[str] = []
+    investigations: List[str] = []
+    treatment: List[str] = []
+    escalation: Optional[str] = ""
+    selected_protocol_ids: List[str] = []
+
+class ManagementSubmissionResponse(BaseModel):
+    session_id: str
+    case_id: str
+    status: str = "RECORDED"
+    immediate_actions: List[str] = []
+    treatment: List[str] = []
+    escalation: Optional[str] = ""
 
 # ==========================================
 # EVALUATION & OSCE SCHEMAS
@@ -298,3 +376,4 @@ class EvaluationResponse(BaseModel):
     areas_to_improve: List[str]
     attending_physician_notes: str
     rubric_breakdown: Optional[Dict[str, Any]] = None
+

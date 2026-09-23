@@ -1,0 +1,275 @@
+{
+  "case_id": "chest_pain_001",
+  "id": "chest_pain_001",
+  "version": 1,
+  "title": "Acute Retrosternal Chest Pain",
+  "specialty": "Cardiology",
+  "presentation": "Chest Pain",
+  "difficulty": "Intermediate",
+  "status": "published",
+  "is_published": true,
+  "learning_objectives": [
+    "Perform targeted OPQRST history for acute chest pain",
+    "Screen for high-risk red flags including radiation and autonomic signs",
+    "Identify acute myocardial infarction on STAT 12-lead ECG",
+    "Initiate immediate dual antiplatelet therapy and emergent catheterization activation"
+  ],
+  "patient": {
+    "name": "Robert Chen",
+    "age": 58,
+    "sex": "male",
+    "gender": "Male",
+    "occupation": "architectural project manager",
+    "persona": {
+      "personality": "anxious",
+      "communication_style": "ordinary_patient",
+      "emotional_state": "worried"
+    },
+    "opening_statement": "Doctor, please... It feels like an elephant is sitting right in the middle of my chest. I started feeling dizzy and breaking out in a cold sweat on my way into the office.",
+    "initial_statement": "Doctor, please... It feels like an elephant is sitting right in the middle of my chest. I started feeling dizzy and breaking out in a cold sweat on my way into the office.",
+    "presentation_complaint": "Severe pressure and heaviness in my chest that started less than an hour ago.",
+    "initial_vitals": {
+      "heart_rate": 98,
+      "blood_pressure": "154/94",
+      "respiratory_rate": 20,
+      "oxygen_saturation": 97,
+      "temperature": 37.1,
+      "pain_score": 8
+    }
+  },
+  "history": {
+    "chief_complaint": {
+      "value": "I started having this really heavy pressure in my chest.",
+      "state": "AVAILABLE"
+    },
+    "onset_timing": {
+      "value": "About 45 minutes ago.",
+      "state": "AVAILABLE"
+    },
+    "onset_activity": {
+      "value": "I was walking up two flights of stairs to my office.",
+      "state": "AVAILABLE"
+    },
+    "location": {
+      "value": "Right in the middle of my chest.",
+      "state": "AVAILABLE"
+    },
+    "character": {
+      "value": "It feels like a deep, heavy crushing pressure, like someone is squeezing my chest in a vice.",
+      "state": "AVAILABLE"
+    },
+    "severity": {
+      "value": "About an 8 out of 10 right now.",
+      "state": "AVAILABLE"
+    },
+    "radiation": {
+      "value": "Yes, it goes into my left jaw and down my left arm.",
+      "state": "AVAILABLE"
+    },
+    "timing": {
+      "value": "It hasn't really gone away.",
+      "state": "AVAILABLE"
+    },
+    "aggravating_factors": {
+      "value": "Moving around or minimal exertion makes it noticeably worse.",
+      "state": "AVAILABLE"
+    },
+    "relieving_factors": {
+      "value": "Nothing really makes it better. Even stopping and resting in my chair did not relieve it at all.",
+      "state": "AVAILABLE"
+    },
+    "associated_symptoms": {
+      "shortness_of_breath": {
+        "value": true,
+        "state": "AVAILABLE"
+      },
+      "sweating": {
+        "value": true,
+        "state": "AVAILABLE"
+      },
+      "dizziness": {
+        "value": true,
+        "state": "AVAILABLE"
+      },
+      "nausea": {
+        "value": true,
+        "state": "AVAILABLE"
+      },
+      "vomiting": {
+        "value": false,
+        "state": "AVAILABLE"
+      },
+      "fever": {
+        "value": false,
+        "state": "AVAILABLE"
+      },
+      "body_aches": {
+        "value": null,
+        "state": "UNKNOWN"
+      },
+      "cough": {
+        "value": false,
+        "state": "AVAILABLE"
+      },
+      "diarrhea": {
+        "value": null,
+        "state": "UNKNOWN"
+      },
+      "headache": {
+        "value": null,
+        "state": "UNKNOWN"
+      },
+      "urinary": {
+        "value": null,
+        "state": "UNKNOWN"
+      }
+    },
+    "pertinent_negatives": [
+      "No pleuritic sharp pain on deep inspiration",
+      "No tearing pain between shoulder blades",
+      "No fever or chills",
+      "No prior heart attack"
+    ]
+  },
+  "past_medical_history": [
+    "Essential hypertension (6 years)",
+    "Hyperlipidemia (elevated LDL)",
+    "No prior myocardial infarction"
+  ],
+  "medications": [
+    "Amlodipine 5 mg daily",
+    "Atorvastatin 20 mg daily (frequently misses doses)"
+  ],
+  "allergies": [
+    "No known drug allergies (NKDA)"
+  ],
+  "family_history": "Father had a fatal heart attack at age 52; Mother has type 2 diabetes.",
+  "social_history": "Smokes 0.5 packs per day for 25 years. Drinks 1-2 glasses of wine on weekends. No illicit substances.",
+  "examination": [
+    {
+      "id": "exam-cv",
+      "system": "Cardiovascular",
+      "name": "Cardiovascular Examination & Auscultation",
+      "findingDescription": "Regular tachycardia at 98 bpm. S1/S2 present. Soft S4 gallop audible at apex. JVP 3 cm above sternal angle at 45 degrees. Peripheral pulses equal bilaterally.",
+      "isAbnormal": true,
+      "clinicalSignificance": "S4 gallop indicates reduced LV compliance from acute myocardial ischemia."
+    },
+    {
+      "id": "exam-pulm",
+      "system": "Respiratory",
+      "name": "Pulmonary Auscultation & Chest Wall Palpation",
+      "findingDescription": "Clear breath sounds bilaterally. No wheezes, crackles, or rhonchi. No chest wall tenderness to palpation.",
+      "isAbnormal": false,
+      "clinicalSignificance": "Absence of chest wall tenderness rules out costochondritis; clear lungs exclude acute pulmonary edema."
+    },
+    {
+      "id": "exam-general",
+      "system": "General",
+      "name": "General Appearance & Diaphoresis",
+      "findingDescription": "Cool, clammy extremities with marked forehead and palmar diaphoresis. Capillary refill 2.5 seconds.",
+      "isAbnormal": true,
+      "clinicalSignificance": "Intense autonomic sympathetic discharge in acute coronary syndrome."
+    },
+    {
+      "id": "exam-abdomen",
+      "system": "Abdominal",
+      "name": "Abdominal Examination",
+      "findingDescription": "Soft, non-tender, non-distended. No guarding, rebound, or palpable pulsatile mass.",
+      "isAbnormal": false,
+      "clinicalSignificance": "Excludes acute abdominal pathology."
+    }
+  ],
+  "investigations": [
+    {
+      "id": "inv-ecg",
+      "name": "12-Lead Electrocardiogram (STAT)",
+      "category": "Cardiology / Point-of-Care",
+      "turnaroundMinutes": 2,
+      "result": "ST Elevation in II, III, aVF (Inferior STEMI)",
+      "unit": "mm",
+      "reference_range": "Normal sinus rhythm",
+      "interpretation": "Sinus rhythm at 96 bpm. 2.5 mm ST-segment elevation in leads II, III, aVF with reciprocal ST depression in leads I and aVL.",
+      "is_available": true
+    },
+    {
+      "id": "inv-troponin",
+      "name": "High-Sensitivity Cardiac Troponin I (hs-cTnI)",
+      "category": "Laboratory",
+      "turnaroundMinutes": 20,
+      "result": "185 ng/L (Markedly Elevated)",
+      "unit": "ng/L",
+      "reference_range": "< 14 ng/L",
+      "interpretation": "Positive for acute myocardial necrosis.",
+      "is_available": true
+    },
+    {
+      "id": "inv-cxr",
+      "name": "Portable Chest Radiograph (CXR)",
+      "category": "Imaging",
+      "turnaroundMinutes": 15,
+      "result": "Normal cardiothoracic ratio, clear fields, no mediastinal widening",
+      "unit": "",
+      "reference_range": "Normal",
+      "interpretation": "Normal mediastinum and lung fields.",
+      "is_available": true
+    }
+  ],
+  "diagnosis_model": {
+    "primary_diagnosis": "Acute ST-Elevation Myocardial Infarction (Inferior STEMI)",
+    "primary_diagnosis_id": "dx-stemi",
+    "differentials": [
+      {
+        "id": "dx-stemi",
+        "name": "ST-Elevation Myocardial Infarction (Inferior STEMI)",
+        "is_correct": true
+      },
+      {
+        "id": "dx-dissection",
+        "name": "Acute Aortic Dissection",
+        "is_correct": false
+      },
+      {
+        "id": "dx-pe",
+        "name": "Pulmonary Embolism",
+        "is_correct": false
+      },
+      {
+        "id": "dx-gerd",
+        "name": "Gastroesophageal Reflux Disease / Esophageal Spasm",
+        "is_correct": false
+      }
+    ]
+  },
+  "management_model": {
+    "immediate_actions": [
+      "Administer chewable Aspirin 324 mg STAT",
+      "Activate Cardiac Catheterization Lab for Emergent Primary PCI",
+      "Initiate IV Unfractionated Heparin bolus and infusion",
+      "Provide sublingual nitroglycerin (if systolic BP > 100 mmHg and no RV infarction)"
+    ],
+    "contraindicated_actions": [
+      "High-dose NSAIDs (Ibuprofen/Ketorolac)",
+      "Discharging patient home"
+    ]
+  },
+  "scoring_rubric": {
+    "high_value_questions": [
+      "Onset and timing",
+      "Pain character and quality",
+      "Radiation to jaw or left arm",
+      "Associated diaphoresis and nausea",
+      "Past medical history and cardiac risk factors"
+    ],
+    "red_flags": [
+      "Radiation to jaw/arm",
+      "Autonomic diaphoresis",
+      "Exclusion of tearing dissection pain"
+    ],
+    "critical_actions": [
+      "Order STAT 12-lead ECG",
+      "Administer chewable Aspirin 324 mg",
+      "Activate emergent PCI",
+      "Order cardiac troponin"
+    ]
+  }
+}

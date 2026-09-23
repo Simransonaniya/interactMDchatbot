@@ -42,6 +42,10 @@ def get_engine():
         print(f"[Database Warning] Could not connect with PostgreSQL drivers ({last_error}). Falling back to SQLite local database.")
         return create_engine("sqlite:///./interactmd.db", connect_args={"check_same_thread": False})
     
+    if db_url.startswith("mongodb"):
+        print("[Database Info] MongoDB URL detected in MONGODB_URI. Using local SQLite for relational tables.")
+        return create_engine("sqlite:///./interactmd.db", connect_args={"check_same_thread": False})
+
     return create_engine(
         db_url,
         connect_args={"check_same_thread": False} if "sqlite" in db_url else {},
