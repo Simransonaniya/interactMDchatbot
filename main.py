@@ -185,10 +185,10 @@ def submit_evaluation(request: EvaluationRequest):
 
 @app.post("/api/simulation/exam")
 def perform_exam(request: ExamRequest):
-    """Physical examination maneuver results loaded authoritatively from MongoDB."""
+    """Physical examination maneuver results loaded authoritatively from MongoDB/SQLite."""
     return examination_service.perform_exam(
         case_id=request.case_id or "chest_pain_001",
-        session_id=None,
+        session_id=request.session_id,
         exam_id=request.exam_id,
         system=request.system
     )
@@ -196,11 +196,11 @@ def perform_exam(request: ExamRequest):
 
 @app.post("/api/simulation/investigation")
 def order_investigation(request: InvestigationRequest):
-    """Diagnostic investigations loaded authoritatively from MongoDB."""
+    """Diagnostic investigations loaded authoritatively from MongoDB/SQLite."""
     test_id = request.test_id or request.test or "STAT 12-Lead ECG"
     return investigation_service.order_investigation(
         case_id=request.case_id or "chest_pain_001",
         test_id=test_id,
-        session_id=None
+        session_id=request.session_id
     )
 

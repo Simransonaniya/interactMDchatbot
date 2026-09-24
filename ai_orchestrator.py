@@ -11,15 +11,15 @@ Classify Intent (QuestionClassifier)
   ↓
 Retrieve Relevant Clinical Fact (FactRetriever)
   ↓
-Controlled Disclosure Check
+Controlled Disclosure & Closed-World Gate
   ↓
-Generate Focused Layperson Patient Response (HuggingFaceProvider)
+Generate Focused Layperson Patient Response (HuggingFaceProvider) / Direct Grounded Statement
   ↓
 Validate & Sanitize (ResponseValidator)
   ↓
 Update Session State & Persist Dialogue + Events in MongoDB
   ↓
-Return Structured Response
+Return Structured Response with Internal Fact Tracking
 """
 
 import asyncio
@@ -111,47 +111,50 @@ class AIOrchestrator:
         # 4. Retrieve ONLY the single permitted clinical fact from MongoDB
         fact: RetrievedFact = FactRetriever.retrieve(intent, case_doc)
 
-        # 5. Determine whether to generate via LLM or use safe controlled statement
+        # 5. Closed-World Decision & Response Generation
         patient_profile = case_doc.get("patient", {})
         patient_name = patient_profile.get("name", "Patient")
         patient_age = patient_profile.get("age", 45)
         patient_gender = patient_profile.get("gender") or patient_profile.get("sex", "Unknown")
-        persona_info = patient_profile.get("persona", {})
-        if isinstance(persona_info, dict):
-            persona_desc = f"Personality: {persona_info.get('personality', 'anxious')}, Emotional state: {persona_info.get('emotional_state', 'worried')}"
-        else:
-            persona_desc = str(persona_info)
 
         reply_text = fact.permitted_statement
 
-        # If not a controlled shield or greeting, attempt Hugging Face LLM generation
-        if not fact.is_controlled_shield and intent.category not in [IntentCategory.GREETING, IntentCategory.UNCLEAR]:
+        # ONLY attempt LLM phrasing if fact is AVAILABLE/KNOWN and NOT a controlled shield
+        should_use_llm = (
+            not fact.is_controlled_shield
+            and fact.state in [FactState.AVAILABLE, FactState.AVAILABLE_NEGATIVE]
+            and intent.category not in [IntentCategory.GREETING, IntentCategory.UNCLEAR, IntentCategory.OUT_OF_SCOPE]
+        )
+
+        if should_use_llm and self.hf_provider.is_configured:
+            neg_instruction = ""
+            if fact.permitted_statement.startswith("No,") or fact.state == FactState.AVAILABLE_NEGATIVE:
+                neg_instruction = f" You DO NOT have this symptom. You MUST state: \"{fact.permitted_statement}\"."
+
             system_prompt = (
                 f"You are {patient_name}, a {patient_age}-year-old {patient_gender} patient in an educational clinical simulation.\n"
-                f"Patient Profile: {persona_desc}.\n"
                 f"RULES:\n"
                 f"1. You are a REAL PATIENT. Speak strictly in the FIRST PERSON ('I', 'my', 'me').\n"
-                f"2. You MUST clearly state your clinical truth: \"{fact.permitted_statement}\". Do NOT omit specific times, numbers, or key words from this truth.\n"
-                f"3. Keep your response natural and concise in 1-2 sentences.\n"
-                f"4. Do NOT mention any medical diagnosis or test results."
+                f"2. You MUST strictly stick to the facts stated in your Clinical Fact: \"{fact.permitted_statement}\".{neg_instruction}\n"
+                f"3. Do NOT invent background activities (e.g. watching TV, waking up, cooking, eating), causes, panic attacks, past doctor check-ups, or unmentioned facts.\n"
+                f"4. Answer ONLY what the doctor asks in a direct, natural 1-2 sentence first-person statement."
             )
 
             user_prompt = (
                 f"Doctor's Question: \"{user_message}\"\n"
                 f"Your Clinical Fact: \"{fact.permitted_statement}\"\n\n"
-                f"Respond naturally as the patient in 1-2 sentences:"
+                f"State this clinical fact directly and naturally in 1-2 sentences:"
             )
 
             raw_llm_response = None
-            if self.hf_provider.is_configured:
-                try:
-                    raw_llm_response = await self.hf_provider.generate_chat(
-                        system_prompt=system_prompt,
-                        user_message=user_prompt,
-                        conversation_history=past_msgs[-4:] if past_msgs else []
-                    )
-                except Exception as e:
-                    print(f"[AIOrchestrator Warning] HF LLM call error: {e}")
+            try:
+                raw_llm_response = await self.hf_provider.generate_chat(
+                    system_prompt=system_prompt,
+                    user_message=user_prompt,
+                    conversation_history=past_msgs[-4:] if past_msgs else []
+                )
+            except Exception as e:
+                print(f"[AIOrchestrator Warning] HF LLM call error: {e}")
 
             # 6. Validate & Sanitize Response
             val_result: ValidationResult = PatientResponseValidator.validate(
@@ -160,20 +163,29 @@ class AIOrchestrator:
             )
 
             if val_result.is_valid:
-                # Check that key numbers/durations from fact are preserved if present in fact
                 clean_text = val_result.sanitized_text
                 fact_text = fact.permitted_statement
-                # If fact has specific duration like 45 minutes and LLM omitted it, use fact
-                if "45 minutes" in fact_text and "45 minutes" not in clean_text:
-                    reply_text = fact.permitted_statement
-                elif fact_text.startswith("Yes,") and not (clean_text.lower().startswith("yes") or "yes" in clean_text.lower() or "i am" in clean_text.lower() or "i do" in clean_text.lower()):
+
+                # If fact is negative, ensure response explicitly denies the symptom
+                if fact_text.startswith("No,") or fact.state == FactState.AVAILABLE_NEGATIVE:
+                    lower_clean = clean_text.lower()
+                    if not any(k in lower_clean for k in ["no", "not", "haven't", "don't", "never", "none"]):
+                        reply_text = fact_text
+                    elif not lower_clean.startswith("no"):
+                        reply_text = f"No, {clean_text}"
+                    else:
+                        reply_text = clean_text
+                # If fact starts with Yes, ensure positive framing
+                elif fact_text.startswith("Yes,") and not any(k in clean_text.lower() for k in ["yes", "i am", "i do", "i have", "definitely"]):
                     reply_text = f"Yes, {clean_text}"
                 else:
                     reply_text = clean_text
             else:
                 reply_text = fact.permitted_statement
+        else:
+            reply_text = fact.permitted_statement
 
-        # 7. Persist to MongoDB
+        # 7. Persist to MongoDB with internal fact source tracking
         facts_revealed = [fact.fact_id] if fact.fact_id else []
 
         if session_id:
@@ -197,7 +209,7 @@ class AIOrchestrator:
                 "timestamp": start_time
             })
 
-            # Save Patient message
+            # Save Patient message with internal response_source metadata
             mongo_manager.save_message({
                 "session_id": session_id,
                 "case_id": case_id,
@@ -209,6 +221,8 @@ class AIOrchestrator:
                     "category": intent.ui_category,
                     "fact_id": fact.fact_id,
                     "fact_state": fact.state.value,
+                    "response_source": fact.response_source,
+                    "fact_key": fact.fact_key,
                     "provider": self.provider_name,
                     "latency_ms": int((time.time() - start_time) * 1000)
                 },
@@ -219,10 +233,11 @@ class AIOrchestrator:
             mongo_manager.save_event(session_id, "DIALOGUE_TURN", {
                 "intent": intent.category.value,
                 "fact_id": fact.fact_id,
+                "response_source": fact.response_source,
                 "empathy_detected": intent.empathy_detected
             })
 
-        # 8. Return structured response
+        # 8. Return structured response (learner UI gets clean fields)
         return {
             "session_id": session_id,
             "message": {
@@ -233,6 +248,8 @@ class AIOrchestrator:
             "category": intent.ui_category,
             "empathy_detected": intent.empathy_detected,
             "facts_revealed": facts_revealed,
+            "response_source": fact.response_source,
+            "fact_key": fact.fact_key,
             "provider": self.provider_name,
             "suggested_topics": [],
             "session_state": {

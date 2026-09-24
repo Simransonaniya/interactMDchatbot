@@ -5,7 +5,7 @@ Tracks an ongoing or completed patient encounter session for a user.
 
 import uuid
 from datetime import datetime
-from sqlalchemy import String, DateTime, ForeignKey, func
+from sqlalchemy import String, DateTime, ForeignKey, JSON, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from database import Base
 
@@ -17,6 +17,7 @@ class SimulationSession(Base):
     case_id: Mapped[str] = mapped_column(String(50), ForeignKey("cases.id", ondelete="CASCADE"), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="ACTIVE", index=True) # ACTIVE, COMPLETED, ABANDONED
 
+    session_data: Mapped[dict] = mapped_column(JSON, default=dict, nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

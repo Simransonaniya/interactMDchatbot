@@ -1,7 +1,7 @@
 """
 InteractMD — Patient Response Validator & Sanitizer.
 Ensures first-person patient voice, blocks hidden diagnostic leaks, enforces length constraints,
-prevents multi-fact dumping, and shields system prompts.
+prevents factual hallucination / mental health causal fabrication, and shields system prompts.
 """
 
 import re
@@ -60,6 +60,22 @@ REPETITIVE_DOCTOR_PROMPTS = [
     r"would you like to ask about my (medical history|medications|allergies)\??",
 ]
 
+HALLUCINATED_INVENTIONS = [
+    r"\bpanic attack\b",
+    r"\banxiety attack\b",
+    r"\broutine check-ups\b",
+    r"\broutine checkup\b",
+    r"\bwent out with friends\b",
+    r"\bwatched a movie\b",
+    r"\bhad dinner and\b",
+    r"\bunclassified symptom\b",
+    r"\btrouble remembering to take it as prescribed\b",
+    r"\bnot really sure if i used it correctly\b",
+    r"\bwatching tv\b",
+    r"\bwoke up this morning\b",
+    r"\bsitting up in bed\b",
+]
+
 
 class ValidationResult:
     def __init__(self, is_valid: bool, sanitized_text: str, reason: Optional[str] = None):
@@ -94,36 +110,45 @@ class PatientResponseValidator:
                 )
 
         # 3. Check for system prompt / JSON leakage
-        if any(leak in t_low for leak in ["system prompt", "case json", "ground truth", "evaluator", "database"]):
+        if any(leak in t_low for leak in ["system prompt", "case json", "ground truth", "evaluator", "database", "clinical fact:"]):
             return ValidationResult(
                 is_valid=False,
                 sanitized_text=fallback_statement,
                 reason="System prompt / database leakage detected"
             )
 
-        # 4. Sanitize 3rd person to 1st person
+        # 4. Check for hallucinated causal / lifestyle inventions
+        for hall_pat in HALLUCINATED_INVENTIONS:
+            if re.search(hall_pat, t_low):
+                return ValidationResult(
+                    is_valid=False,
+                    sanitized_text=fallback_statement,
+                    reason=f"Hallucinated patient invention detected: {hall_pat}"
+                )
+
+        # 5. Sanitize 3rd person to 1st person
         for pattern, replacement in THIRD_PERSON_VIOLATIONS:
             text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
 
         for pattern, replacement in PRONOUN_LEAKS:
             text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
 
-        # 5. Remove repetitive doctor-guiding questions
+        # 6. Remove repetitive doctor-guiding questions
         for pattern in REPETITIVE_DOCTOR_PROMPTS:
             text = re.sub(pattern, "", text, flags=re.IGNORECASE).strip()
 
-        # 6. Length enforcement (1-3 sentences max)
+        # 7. Length enforcement (1-3 sentences max)
         sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', text) if s.strip()]
         if len(sentences) > 3:
             text = " ".join(sentences[:2])
             if not text.endswith(('.', '!', '?')):
                 text += "."
 
-        # 7. Ensure proper capitalization
+        # 8. Ensure proper capitalization
         if text:
             text = text[0].upper() + text[1:]
 
-        # 8. Check minimal validity
+        # 9. Check minimal validity
         if len(text.split()) < 2:
             return ValidationResult(is_valid=False, sanitized_text=fallback_statement, reason="Response too short")
 

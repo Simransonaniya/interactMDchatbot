@@ -275,6 +275,7 @@ class ChatResponse(BaseModel):
     session_state: Optional[Dict[str, Any]] = None
 
 class ExamRequest(BaseModel):
+    session_id: Optional[str] = None
     case_id: Optional[str] = None
     exam_id: Optional[str] = None
     system: Optional[str] = None
@@ -293,6 +294,7 @@ class ExamResponse(BaseModel):
     findings: List[ExamFindingItem] = []
 
 class InvestigationRequest(BaseModel):
+    session_id: Optional[str] = None
     case_id: Optional[str] = None
     test_id: Optional[str] = None
     test: Optional[str] = None

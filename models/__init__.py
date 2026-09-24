@@ -12,6 +12,7 @@ from .case_model import (
 from .session_model import SimulationSession
 from .message import Message
 from .evaluation import Evaluation
+from .interaction_event import InteractionEvent
 
 __all__ = [
     "User",
@@ -24,4 +25,5 @@ __all__ = [
     "SimulationSession",
     "Message",
     "Evaluation",
+    "InteractionEvent",
 ]
