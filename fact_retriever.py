@@ -151,20 +151,70 @@ class FactRetriever:
             )
 
         # ---------------------------------------------------------
-        # 4. CLARIFICATION ("Are you sure?", "Really?", "Can you explain that again?")
+        # 4. CLARIFICATION, CONFIRMATION, & CHALLENGE
         # ---------------------------------------------------------
-        if intent.category in [IntentCategory.CLARIFICATION, IntentCategory.CONFIRMATION]:
+        if intent.category in [IntentCategory.CHALLENGE, IntentCategory.CLARIFICATION, IntentCategory.CONFIRMATION]:
             last_patient_msg = (session_state.last_patient_message if session_state else "") or ""
-            last_fact_key = (session_state.last_disclosed_fact_key if session_state else "") or ""
+            last_fact_key = (session_state.last_disclosed_fact_key if session_state else "") or (session_state.last_slot if session_state else "") or ""
+            last_topic = (session_state.last_topic if session_state else "") or (session_state.last_question_topic if session_state else "") or ""
             last_stmt = (session_state.last_disclosed_statement if session_state else "") or ""
+            last_fact_state = getattr(session_state, "last_patient_fact_state", None) or ""
             raw_lower = intent.raw_query.lower()
 
-            # A. Check if confirming / clarifying severity (e.g. 8/10)
+            is_challenge = (intent.category == IntentCategory.CHALLENGE) or any(
+                k in raw_lower for k in [
+                    "how can you don't know", "how can you not know", "why can't you remember",
+                    "how do you not know", "why you don't know", "how you don't know",
+                    "are you made you don't know anything", "don't know anything", "can't remember anything",
+                    "how is that possible"
+                ]
+            )
+
+            is_unknown_prior = (
+                str(last_fact_state).upper() == "UNKNOWN"
+                or any(k in last_patient_msg.lower() for k in ["don't really remember", "can't remember", "don't remember", "haven't really noticed", "not sure", "genuinely can't remember"])
+                or last_fact_key in ["diet_history", "diet", "breakfast", "dinner", "lunch"]
+                or last_topic in ["diet_history", "diet", "breakfast", "dinner", "lunch"]
+                or intent.referenced_topic in ["diet_history", "diet", "breakfast", "dinner", "lunch"]
+                or intent.referenced_slot in ["diet_history", "diet", "breakfast", "dinner", "lunch"]
+            )
+
+            # A. Challenge or Clarification on an Unknown / Memory Fact (e.g. dinner, breakfast, missing memory)
+            if is_unknown_prior and is_challenge:
+                stmt = "I was rushing to get into the office, doctor, and right now with this crushing chest pain and dizziness, I honestly just can't remember. My mind is completely overwhelmed by this pain."
+                return RetrievedFact(
+                    fact_id="challenge_memory_defense",
+                    state=FactState.UNKNOWN,
+                    truth_value=None,
+                    permitted_statement=stmt,
+                    is_controlled_shield=True,
+                    category="General",
+                    response_source="CONVERSATION_MEMORY",
+                    fact_key=last_fact_key or "diet_history"
+                )
+
+            if is_unknown_prior and not is_challenge:
+                stmt = "Yes, doctor, I'm sure. I really don't remember... this chest pain and dizziness has taken all of my focus."
+                return RetrievedFact(
+                    fact_id="confirmation_unknown_fact",
+                    state=FactState.UNKNOWN,
+                    truth_value=None,
+                    permitted_statement=stmt,
+                    is_controlled_shield=True,
+                    category="General",
+                    response_source="CONVERSATION_MEMORY",
+                    fact_key=last_fact_key or "diet_history"
+                )
+
+            # B. Check if confirming / clarifying severity (e.g. 8/10)
             if "severity" in last_fact_key or "8" in last_patient_msg or "8 out of 10" in last_stmt or "8" in raw_lower:
                 sev_val = (session_state.severity if session_state else "") or "8 out of 10"
                 clean_sev = re.sub(r"^(about\s+|an\s+)+", "", sev_val, flags=re.IGNORECASE).rstrip(".")
                 clean_sev = re.sub(r"\s+right now", "", clean_sev, flags=re.IGNORECASE)
-                stmt = f"Yes, doctor. It's about an {clean_sev} right now, it's really intense."
+                if is_challenge:
+                    stmt = f"Because the pain is so overwhelming and crushing, doctor, it's about an {clean_sev}. It's one of the worst pains I've ever felt."
+                else:
+                    stmt = f"Yes, doctor. It's about an {clean_sev} right now, it's really intense."
                 return RetrievedFact(
                     fact_id="clarification_severity",
                     state=FactState.AVAILABLE,
@@ -176,9 +226,12 @@ class FactRetriever:
                     fact_key="severity"
                 )
 
-            # B. Check if confirming / clarifying character (elephant on chest / pressure)
+            # C. Check if confirming / clarifying character (elephant on chest / pressure)
             if "character" in last_fact_key or "elephant" in last_patient_msg.lower() or "pressure" in last_patient_msg.lower():
-                stmt = "Yes, doctor. It really feels like an elephant is sitting right in the middle of my chest."
+                if is_challenge:
+                    stmt = "Because it feels like a heavy weight pressing right down on the center of my chest that won't let up, doctor."
+                else:
+                    stmt = "Yes, doctor. It really feels like an elephant is sitting right in the middle of my chest."
                 return RetrievedFact(
                     fact_id="clarification_character",
                     state=FactState.AVAILABLE,
@@ -190,9 +243,12 @@ class FactRetriever:
                     fact_key="character"
                 )
 
-            # C. Check if confirming / clarifying onset (45 minutes)
+            # D. Check if confirming / clarifying onset (45 minutes)
             if "onset" in last_fact_key or "45 minutes" in last_patient_msg.lower() or "45" in raw_lower:
-                stmt = "Yes, doctor, that's correct. It started about 45 minutes ago."
+                if is_challenge:
+                    stmt = "I checked the time when I was leaving the house and started feeling sick on my commute, so it's definitely been about 45 minutes."
+                else:
+                    stmt = "Yes, doctor, that's correct. It started about 45 minutes ago."
                 return RetrievedFact(
                     fact_id="clarification_onset",
                     state=FactState.AVAILABLE,
@@ -204,9 +260,12 @@ class FactRetriever:
                     fact_key="onset_timing"
                 )
 
-            # D. Check if confirming / clarifying radiation
+            # E. Check if confirming / clarifying radiation
             if "radiation" in last_fact_key or "jaw" in last_patient_msg.lower() or "arm" in last_patient_msg.lower():
-                stmt = "Yes, doctor. It definitely spreads up into my jaw and down my left arm."
+                if is_challenge:
+                    stmt = "Because I can feel the tight aching shooting right up along my jaw and down my arm, doctor."
+                else:
+                    stmt = "Yes, doctor. It definitely spreads up into my jaw and down my left arm."
                 return RetrievedFact(
                     fact_id="clarification_radiation",
                     state=FactState.AVAILABLE,
@@ -218,8 +277,11 @@ class FactRetriever:
                     fact_key="radiation"
                 )
 
-            # E. General clarification affirmation
-            stmt = "Yes, doctor, I'm sure. That's definitely how it feels right now."
+            # F. General clarification / challenge response
+            if is_challenge:
+                stmt = "I'm just describing what I'm feeling as best as I can, doctor. This chest pressure and dizziness is really frightening."
+            else:
+                stmt = "Yes, doctor, I'm sure. That's definitely how it feels right now."
             return RetrievedFact(
                 fact_id="clarification_general",
                 state=FactState.AVAILABLE,
@@ -845,9 +907,22 @@ class FactRetriever:
                 fact_key=symptom_key
             )
 
-        # Default fallback to UNKNOWN
+        # UNCLEAR / UNKNOWN Intent
+        if intent.category in [IntentCategory.UNCLEAR, IntentCategory.UNKNOWN]:
+            return RetrievedFact(
+                fact_id="unclear_query",
+                state=FactState.UNKNOWN,
+                truth_value=None,
+                permitted_statement="Could you clarify what you mean, doctor? I'm having a hard time focusing with this chest pain.",
+                is_controlled_shield=True,
+                category="General",
+                response_source="UNKNOWN",
+                fact_key=None
+            )
+
+        # Default fallback for unclassified symptom inquiries
         return RetrievedFact(
-            fact_id="general_undocumented",
+            fact_id="general_undocumented_symptom",
             state=FactState.UNKNOWN,
             truth_value=None,
             permitted_statement="I haven't really noticed anything like that, doctor.",

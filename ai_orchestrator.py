@@ -116,10 +116,12 @@ class AIOrchestrator:
 
         session_state.last_clinician_message = user_message
 
-        # 4. Classify Learner Intent
-        intent: ClassifiedIntent = QuestionClassifier.classify(user_message)
+        # 4. Classify Learner Intent (with Previous-Turn Context)
+        intent: ClassifiedIntent = QuestionClassifier.classify(user_message, session_state=session_state)
         session_state.last_intent = intent.category.value
-        session_state.last_question_topic = intent.subconcept or intent.category.value
+        session_state.last_topic = intent.subconcept or intent.category.value
+        session_state.last_question_topic = session_state.last_topic
+        session_state.last_time_reference = intent.time_reference
 
         # 5. Retrieve Relevant Clinical Fact (Memory & Case Grounded)
         fact: RetrievedFact = FactRetriever.retrieve(
@@ -142,6 +144,7 @@ class AIOrchestrator:
             IntentCategory.UNKNOWN,
             IntentCategory.OUT_OF_SCOPE,
             IntentCategory.OFF_TOPIC,
+            IntentCategory.CHALLENGE,
             IntentCategory.CLARIFICATION,
             IntentCategory.CONFIRMATION,
             IntentCategory.MANAGEMENT_STATEMENT,
@@ -237,6 +240,8 @@ class AIOrchestrator:
 
         # 8. Update Session State with Revealed Fact and Last Patient Statement
         session_state.last_patient_message = reply_text
+        session_state.last_patient_fact_state = fact.state.value
+        session_state.last_slot = (intent.slots[0] if intent.slots else fact.fact_key) or intent.subconcept
         if fact.fact_id:
             session_state.record_disclosure(fact.fact_id, reply_text)
             if fact.fact_key:
@@ -260,7 +265,11 @@ class AIOrchestrator:
                     "intent": intent.category.value,
                     "primary_type": intent.primary_type,
                     "subconcept": intent.subconcept,
-                    "empathy_detected": intent.empathy_detected
+                    "empathy_detected": intent.empathy_detected,
+                    "is_follow_up_to_previous_turn": intent.is_follow_up_to_previous_turn,
+                    "relationship": intent.relationship,
+                    "referenced_topic": intent.referenced_topic,
+                    "referenced_slot": intent.referenced_slot
                 },
                 "timestamp": start_time
             })
@@ -279,7 +288,9 @@ class AIOrchestrator:
                     "response_source": fact.response_source,
                     "fact_key": fact.fact_key,
                     "provider": self.provider_name,
-                    "latency_ms": int((time.time() - start_time) * 1000)
+                    "latency_ms": int((time.time() - start_time) * 1000),
+                    "is_follow_up_to_previous_turn": intent.is_follow_up_to_previous_turn,
+                    "relationship": intent.relationship
                 },
                 "timestamp": time.time()
             })
@@ -289,7 +300,8 @@ class AIOrchestrator:
                 "primary_type": intent.primary_type,
                 "fact_id": fact.fact_id,
                 "response_source": fact.response_source,
-                "empathy_detected": intent.empathy_detected
+                "empathy_detected": intent.empathy_detected,
+                "relationship": intent.relationship
             })
 
         # 10. Return Structured Response
@@ -303,6 +315,10 @@ class AIOrchestrator:
             "category": intent.ui_category,
             "intent": intent.primary_type,
             "intent_category": intent.category.value,
+            "is_follow_up_to_previous_turn": intent.is_follow_up_to_previous_turn,
+            "relationship": intent.relationship,
+            "referenced_topic": intent.referenced_topic,
+            "referenced_slot": intent.referenced_slot,
             "empathy_detected": intent.empathy_detected,
             "facts_revealed": facts_revealed,
             "response_source": fact.response_source,
@@ -311,8 +327,13 @@ class AIOrchestrator:
             "suggested_topics": [],
             "session_state": {
                 "revealed_fact_ids": facts_revealed,
+                "last_clinician_message": user_message,
+                "last_patient_message": reply_text,
                 "last_intent": intent.category.value,
-                "last_patient_message": reply_text
+                "last_topic": session_state.last_topic,
+                "last_slot": session_state.last_slot,
+                "last_time_reference": session_state.last_time_reference,
+                "last_patient_fact_state": fact.state.value
             }
         }
 

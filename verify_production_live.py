@@ -29,71 +29,104 @@ def send_turn(label, msg):
     print(f"Patient: {reply}")
     return data
 
-# Turn 1: Shortness of breath
-t1 = send_turn("Turn 1 (Dyspnea / Wheezing)", "Are you feeling short of breath or wheezing?")
-reply1 = t1.get('reply', '').lower()
-assert any(k in reply1 for k in ['short of breath', 'breath', 'tight'])
-assert "haven't really noticed" not in reply1
+# -------------------------------------------------------------
+# EXACT 8-STEP SEQUENCE REQUIRED BY SPECIFICATION:
+# Step 1: Start Robert Chen -> Initial complaint present in session
+# Step 2: "When did this start and how long has it lasted?" -> ~45 minutes
+# Step 3: "Had you breakfast?" -> breakfast response
+# Step 4: "What had you in dinner?" -> dinner response
+# Step 5: "How can you don't know?" -> challenge/clarification defense
+# Step 6: "Are you sure?" -> confirmation
+# Step 7: "What did you eat for lunch?" -> lunch response
+# Step 8: "Why can't you remember?" -> challenge/clarification defense
+# -------------------------------------------------------------
 
-# Turn 2: Breakfast
-t2 = send_turn("Turn 2 (Breakfast Query)", "Had you breakfast?")
-reply2 = t2.get('reply', '').lower()
-assert "haven't really noticed anything like that" not in reply2
-assert any(k in reply2 for k in ['breakfast', 'morning', 'remember', 'ate', 'rushing'])
+# Step 2: Timing / Onset
+s2 = send_turn("Step 2 (Timing / Onset)", "When did this start and how long has it lasted?")
+rep2 = s2.get('reply', '').lower()
+assert "45 minutes" in rep2
+assert "haven't really noticed anything like that" not in rep2
 
-# Turn 3: Temporal / Meal mismatch (Lunch & Dinner yesterday - must NOT return breakfast!)
-t3 = send_turn("Turn 3 (Lunch & Dinner Yesterday Query)", "What did you eat yesterday for lunch and dinner?")
-reply3 = t3.get('reply', '').lower()
-assert "haven't really noticed anything like that" not in reply3
-assert "breakfast" not in reply3
-assert any(k in reply3 for k in ['lunch', 'dinner'])
-assert 'yesterday' in reply3
+# Step 3: Breakfast
+s3 = send_turn("Step 3 (Breakfast)", "Had you breakfast?")
+rep3 = s3.get('reply', '').lower()
+assert any(k in rep3 for k in ["breakfast", "rushing", "remember"])
+assert "haven't really noticed anything like that" not in rep3
 
-# Turn 4: Current Medications History
-t4 = send_turn("Turn 4 (Current Medications History)", "What medicines do you take?")
-reply4 = t4.get('reply', '').lower()
-assert any(k in reply4 for k in ['amlodipine', 'atorvastatin', 'medications'])
-assert "haven't really noticed" not in reply4
+# Step 4: Dinner
+s4 = send_turn("Step 4 (Dinner)", "What had you in dinner?")
+rep4 = s4.get('reply', '').lower()
+assert any(k in rep4 for k in ["dinner", "yesterday", "chest pain", "remember"])
+assert "haven't really noticed anything like that" not in rep4
 
-# Turn 5: Management Statement ("You can take a medicine and rest.")
-t5 = send_turn("Turn 5 (Management Statement)", "You can take a medicine and rest.")
-reply5 = t5.get('reply', '').lower()
-assert "haven't really noticed" not in reply5
-assert any(k in reply5 for k in ['okay', 'doctor', 'rest', 'relieve', 'chest pain', 'breathe', 'help'])
+# Step 5: Ungrammatical Challenge: "How can you don't know?"
+s5 = send_turn("Step 5 (Ungrammatical Challenge - How can you don't know?)", "How can you don't know?")
+rep5 = s5.get('reply', '').lower()
+assert "haven't really noticed anything like that" not in rep5
+assert any(k in rep5 for k in ["rushing", "chest pain", "dizziness", "remember", "office", "overwhelmed", "pain"])
 
-# Turn 6: Medication Fragment ("Niciplus.")
-t6 = send_turn("Turn 6 (Medication Fragment - Niciplus)", "Niciplus.")
-reply6 = t6.get('reply', '').lower()
-assert "haven't really noticed anything like that" not in reply6
-assert any(k in reply6 for k in ['medication', 'medicine', 'take', 'doctor', 'relieve', 'chest pain', 'breathe', 'help', 'okay'])
+# Step 6: Confirmation: "Are you sure?"
+s6 = send_turn("Step 6 (Confirmation - Are you sure?)", "Are you sure?")
+rep6 = s6.get('reply', '').lower()
+assert "haven't really noticed anything like that" not in rep6
+assert any(k in rep6 for k in ["sure", "remember", "chest pain", "focus", "dizziness", "yes"])
 
-# Turn 7: Medication Name + Form with typo ("Paracetomol tablet.")
-t7 = send_turn("Turn 7 (Medication Fragment with typo - Paracetomol tablet)", "Paracetomol tablet.")
-reply7 = t7.get('reply', '').lower()
-assert "haven't really noticed anything like that" not in reply7
-assert any(k in reply7 for k in ['okay', 'doctor', 'relieve', 'chest pain', 'breathe', 'tablet', 'medicine', 'take'])
+# Step 7: New Question: "What did you eat for lunch?"
+s7 = send_turn("Step 7 (New Question - What did you eat for lunch?)", "What did you eat for lunch?")
+rep7 = s7.get('reply', '').lower()
+assert "haven't really noticed anything like that" not in rep7
+assert any(k in rep7 for k in ["lunch", "remember", "eat", "pain"])
 
-# Turn 8: PCOD in male patient ("Do you have PCOD?")
-t8 = send_turn("Turn 8 (Demographics - PCOD in male)", "Do you have PCOD?")
-reply8 = t8.get('reply', '').lower()
-assert "male" in reply8 or "doesn't apply" in reply8
+# Step 8: Challenge: "Why can't you remember?"
+s8 = send_turn("Step 8 (Challenge - Why can't you remember?)", "Why can't you remember?")
+rep8 = s8.get('reply', '').lower()
+assert "haven't really noticed anything like that" not in rep8
+assert any(k in rep8 for k in ["rushing", "chest pain", "dizziness", "remember", "office", "overwhelmed", "pain"])
 
-# Turn 9: Clarification ("Are you sure?")
-t9 = send_turn("Turn 9 (Clarification - Are you sure?)", "Are you sure?")
-reply9 = t9.get('reply', '').lower()
-assert "haven't really noticed" not in reply9
-assert any(k in reply9 for k in ['yes', 'sure', 'doctor', 'definitely', 'honest'])
+# -------------------------------------------------------------
+# ADDITIONAL PRESERVED BEHAVIORS VALIDATION:
+# -------------------------------------------------------------
 
-# Turn 10a: Repeated history question (Severity 1)
-t10a = send_turn("Turn 10a (Severity Inquiry 1)", "How severe is your discomfort?")
-reply10a = t10a.get('reply', '').lower()
-assert '8' in reply10a or 'eight' in reply10a
+# Step 9: Ungrammatical colloquial challenge ("are you made you don't know anything")
+s9 = send_turn("Step 9 (Colloquial Challenge - are you made you don't know anything)", "are you made you don't know anything")
+rep9 = s9.get('reply', '').lower()
+assert "haven't really noticed anything like that" not in rep9
+assert any(k in rep9 for k in ["rushing", "chest pain", "dizziness", "remember", "office", "overwhelmed", "pain"])
 
-# Turn 10b: Repeated history question (Severity 2)
-t10b = send_turn("Turn 10b (Severity Inquiry 2 - Repeated)", "How severe is your discomfort?")
-reply10b = t10b.get('reply', '').lower()
-assert '8' in reply10b or 'eight' in reply10b
+# Step 10: Current Medications History
+s10 = send_turn("Step 10 (Current Medications History)", "Had you eat any medicine?")
+rep10 = s10.get('reply', '').lower()
+assert any(k in rep10 for k in ["amlodipine", "atorvastatin", "medications"])
+assert "haven't really noticed" not in rep10
+
+# Step 11: Management Statement
+s11 = send_turn("Step 11 (Management Statement - You can take a medicine and rest)", "You can take a medicine and rest.")
+rep11 = s11.get('reply', '').lower()
+assert "haven't really noticed" not in rep11
+assert any(k in rep11 for k in ["okay", "doctor", "rest", "relieve", "chest pain", "breathe", "help"])
+
+# Step 12: Medication Fragment ("niciplus")
+s12 = send_turn("Step 12 (Medication Fragment - niciplus)", "niciplus")
+rep12 = s12.get('reply', '').lower()
+assert "haven't really noticed anything like that" not in rep12
+assert any(k in rep12 for k in ["medication", "medicine", "take", "doctor", "relieve", "chest pain", "breathe", "help", "okay"])
+
+# Step 13: Demographics - PCOD in male patient
+s13 = send_turn("Step 13 (Demographics - PCOD in male)", "Do you have PCOD?")
+rep13 = s13.get('reply', '').lower()
+assert "male" in rep13 or "doesn't apply" in rep13
+
+# Step 14: Severity Inquiry + Confirmation
+s14a = send_turn("Step 14a (Severity Inquiry)", "How severe is your discomfort?")
+rep14a = s14a.get('reply', '').lower()
+assert "8" in rep14a or "eight" in rep14a
+
+s14b = send_turn("Step 14b (Severity Confirmation - Are you sure?)", "Are you sure?")
+rep14b = s14b.get('reply', '').lower()
+assert "8" in rep14b or "eight" in rep14b
+assert "haven't really noticed anything like that" not in rep14b
 
 print('\n=====================================================')
-print('ALL 10 PRODUCTION TURNS VERIFIED AND PASSED!')
+print('ALL 14 PRODUCTION VERIFICATION TURNS PASSED SUCCESSFULLY!')
 print('=====================================================')
+

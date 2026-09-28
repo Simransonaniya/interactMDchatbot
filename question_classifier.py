@@ -24,6 +24,7 @@ class IntentCategory(str, Enum):
     HISTORY_QUESTION = "HISTORY_QUESTION"
     CLARIFICATION = "CLARIFICATION"
     CONFIRMATION = "CONFIRMATION"
+    CHALLENGE = "CHALLENGE"
     EMPATHY_REASSURANCE = "EMPATHY_REASSURANCE"
     MANAGEMENT_STATEMENT = "MANAGEMENT_STATEMENT"
     MEDICATION_STATEMENT = "MEDICATION_STATEMENT"
@@ -75,7 +76,11 @@ class ClassifiedIntent:
         jargon_detected: Optional[str] = None,
         action_target: Optional[str] = None,
         treatment_substance: Optional[str] = None,
-        normalized_query: Optional[str] = None
+        normalized_query: Optional[str] = None,
+        is_follow_up_to_previous_turn: bool = False,
+        relationship: Optional[str] = None,
+        referenced_topic: Optional[str] = None,
+        referenced_slot: Optional[str] = None
     ):
         self.raw_query = raw_query
         self.category = category
@@ -88,6 +93,10 @@ class ClassifiedIntent:
         self.action_target = action_target
         self.treatment_substance = treatment_substance
         self.normalized_query = normalized_query or raw_query
+        self.is_follow_up_to_previous_turn = is_follow_up_to_previous_turn
+        self.relationship = relationship or ("PREVIOUS_TURN" if is_follow_up_to_previous_turn else "NEW_QUESTION")
+        self.referenced_topic = referenced_topic
+        self.referenced_slot = referenced_slot
 
     @property
     def primary_type(self) -> str:
@@ -109,10 +118,16 @@ class ClassifiedIntent:
             return "OFF_TOPIC"
         if self.category in [IntentCategory.UNCLEAR, IntentCategory.UNKNOWN]:
             return "UNKNOWN"
+        if self.category == IntentCategory.CHALLENGE:
+            return "CHALLENGE"
+        if self.category == IntentCategory.CLARIFICATION:
+            return "CLARIFICATION"
+        if self.category == IntentCategory.CONFIRMATION:
+            return "CONFIRMATION"
         return self.category.value
 
     def __repr__(self):
-        return f"<ClassifiedIntent category={self.category.value} subconcept={self.subconcept} slots={self.slots} time={self.time_reference} empathy={self.empathy_detected}>"
+        return f"<ClassifiedIntent category={self.category.value} subconcept={self.subconcept} slots={self.slots} time={self.time_reference} relationship={self.relationship}>"
 
 
 PROMPT_INJECTION_PATTERNS = [
@@ -143,10 +158,52 @@ DIAGNOSIS_STATEMENT_PATTERNS = [
     r"\b(this (is|appears|looks|sounds)|it (is|appears|looks|sounds))\s+(to be\s+)?(cardiac|heart related|coronary)\b",
 ]
 
+CHALLENGE_PATTERNS = [
+    r"\b(how\s+(can\s+you|do\s+you|could\s+you|can|you)\s+(not|don't|dont|not\s+even)\s+know)\b",
+    r"\b(how\s+(can\s+you|do\s+you|could\s+you|can|you)\s+(not|don't|dont)\s+remember)\b",
+    r"\b(why\s+(can't\s+you|cant\s+you|can\s+you\s+not|don't\s+you|dont\s+you|you\s+don't|you\s+dont|you\s+not)\s+(know|remember))\b",
+    r"\b(why\s+(can't|cant)\s+you\s+remember)\b",
+    r"\b(are\s+you\s+(made|mad)\s+(that\s+)?(you\s+)?(don't|dont)\s+know\s+anything)\b",
+    r"\b(are\s+you\s+(made|mad)\s+(that\s+)?(you\s+)?(can't|cant)\s+remember\s+anything)\b",
+    r"\b((you\s+)?(don't|dont)\s+know\s+anything)\b",
+    r"\b((you\s+)?(can't|cant)\s+remember\s+anything)\b",
+    r"\b(how\s+is\s+(that|this)\s+possible)\b",
+    r"\b(how\s+come\s+you\s+(don't|dont|can't|cant)\s+(know|remember))\b",
+    r"\b(you\s+really\s+(don't|dont)\s+know)\b",
+    r"\b(how\s+can\s+it\s+be\s+that\s+you\s+(don't|dont)\s+know)\b",
+    r"\b(how\s+can\s+you\s+be\s+sure\s+you\s+don't\s+know)\b",
+    r"^how can you don't know\b",
+    r"^how can you dont know\b",
+    r"^how you don't know\b",
+    r"^how you dont know\b",
+    r"^why you don't know\b",
+    r"^why you dont know\b",
+    r"^why you don't remember\b",
+    r"^why you dont remember\b",
+    r"^how you don't remember\b",
+    r"^how you dont remember\b",
+    r"^are you made you don't know anything\b",
+    r"^are you made you dont know anything\b",
+    r"^why can't you remember\b",
+    r"^why cant you remember\b",
+    r"^how can't you remember\b",
+    r"^how cant you remember\b",
+    r"^you don't know\??$",
+    r"^you dont know\??$",
+    r"^you don't remember\??$",
+    r"^you dont remember\??$",
+    r"^how can you not know\b",
+    r"^how do you not know\b",
+    r"^why don't you know\b",
+    r"^why dont you know\b",
+]
+
 CLARIFICATION_PATTERNS = [
     r"^(are you sure|really\??|are you certain|you sure|are you positive|are you absolutely sure|are you really sure)\b",
-    r"^(can you explain that again|what do you mean|could you clarify|tell me more about that|could you repeat that)\b",
+    r"^(can you explain that again|what do you mean|could you clarify|tell me more about that|could you repeat that|can you explain|can you clarify)\b",
+    r"^(what do you mean by that|how is that possible|how can you be sure)\b",
     r"^(are you sure about that|you sure about that)\b",
+    r"^(why\??|what do you mean\??)$",
 ]
 
 CONFIRMATION_PATTERNS = [
@@ -276,10 +333,17 @@ def extract_diet_slots_and_time(query: str) -> Tuple[List[str], str]:
 class QuestionClassifier:
 
     @staticmethod
-    def classify(query_text: str) -> ClassifiedIntent:
+    def classify(query_text: str, session_state: Optional[Any] = None) -> ClassifiedIntent:
         raw_norm = normalize_message(query_text)
         query = query_text.lower().strip()
         tokens = query.split()
+
+        # Extract previous-turn state if available
+        last_topic = None
+        last_slot = None
+        if session_state:
+            last_topic = getattr(session_state, "last_topic", None) or getattr(session_state, "last_question_topic", None)
+            last_slot = getattr(session_state, "last_slot", None) or getattr(session_state, "last_disclosed_fact_key", None)
 
         # 1. Prompt Injection Shield
         if any(re.search(pat, query) for pat in PROMPT_INJECTION_PATTERNS):
@@ -342,24 +406,46 @@ class QuestionClassifier:
                 normalized_query=raw_norm
             )
 
-        # 7. Clarification Request ("Are you sure?", "Really?", "Can you explain that again?")
+        # 7. Challenge Request ("How can you not know?", "How can you don't know", "Why can't you remember?")
+        if any(re.search(pat, query) for pat in CHALLENGE_PATTERNS):
+            return ClassifiedIntent(
+                raw_query=query_text,
+                category=IntentCategory.CHALLENGE,
+                subconcept="challenge",
+                ui_category="General",
+                normalized_query=raw_norm,
+                is_follow_up_to_previous_turn=True,
+                relationship="CHALLENGE",
+                referenced_topic=last_topic,
+                referenced_slot=last_slot
+            )
+
+        # 8. Clarification Request ("Are you sure?", "Really?", "Can you explain that again?")
         if any(re.search(pat, query) for pat in CLARIFICATION_PATTERNS):
             return ClassifiedIntent(
                 raw_query=query_text,
                 category=IntentCategory.CLARIFICATION,
                 subconcept="clarification",
                 ui_category="General",
-                normalized_query=raw_norm
+                normalized_query=raw_norm,
+                is_follow_up_to_previous_turn=True,
+                relationship="CLARIFICATION",
+                referenced_topic=last_topic,
+                referenced_slot=last_slot
             )
 
-        # 8. Confirmation Request ("Is that correct?", "So it's been 45 minutes?")
+        # 9. Confirmation Request ("Is that correct?", "So it's been 45 minutes?")
         if any(re.search(pat, query) for pat in CONFIRMATION_PATTERNS):
             return ClassifiedIntent(
                 raw_query=query_text,
                 category=IntentCategory.CONFIRMATION,
                 subconcept="confirmation",
                 ui_category="General",
-                normalized_query=raw_norm
+                normalized_query=raw_norm,
+                is_follow_up_to_previous_turn=True,
+                relationship="CONFIRMATION",
+                referenced_topic=last_topic,
+                referenced_slot=last_slot
             )
 
         # 8b. History Question about Medications (Asking what patient takes / ate medicine)

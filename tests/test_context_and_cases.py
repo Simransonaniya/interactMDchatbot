@@ -639,3 +639,121 @@ def test_14_medication_fragments_and_history():
     rep_pcod = r_pcod["reply"].lower()
     assert "male" in rep_pcod or "doesn't apply" in rep_pcod
 
+
+def test_clarification_and_challenge_repair_conversation_flow():
+    """
+    Validates complete multi-turn dialogue with challenge, clarification, confirmation, and memory defense:
+    1. Initial Complaint
+    2. Timing: "When did this start and how long has it lasted?" -> ~45 minutes
+    3. Breakfast: "Had you breakfast?" -> breakfast response
+    4. Dinner: "What had you in dinner?" -> dinner response
+    5. Ungrammatical Challenge: "how can you don't know" -> challenge response (NOT symptom fallback!)
+    6. Confirmation: "Are you sure?" -> confirmation response (NOT symptom fallback!)
+    7. New Question: "What did you eat for lunch?" -> lunch-specific response
+    8. Challenge: "Why can't you remember?" -> challenge response (NOT symptom fallback!)
+    9. Colloquial Challenge: "are you made you don't know anything" -> challenge response
+    10. Severity Confirmation: "My discomfort is 8/10" -> "Are you sure?" -> 8/10 confirmation
+    """
+    session_id = f"test-flow-challenge-{uuid.uuid4()}"
+    case_id = "chest_pain_001"
+
+    # Step 1: Timing / Onset
+    r1 = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="When did this start and how long has it lasted?",
+        session_id=session_id
+    )
+    rep1 = r1["reply"].lower()
+    assert "45 minutes" in rep1
+    assert "haven't really noticed anything like that" not in rep1
+
+    # Step 2: Breakfast
+    r2 = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="Had you breakfast?",
+        session_id=session_id
+    )
+    rep2 = r2["reply"].lower()
+    assert "breakfast" in rep2 or "rushing" in rep2
+    assert "haven't really noticed anything like that" not in rep2
+
+    # Step 3: Dinner
+    r3 = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="What had you in dinner?",
+        session_id=session_id
+    )
+    rep3 = r3["reply"].lower()
+    assert "dinner" in rep3 or "yesterday" in rep3 or "chest pain" in rep3
+    assert "haven't really noticed anything like that" not in rep3
+
+    # Step 4: Ungrammatical Challenge: "how can you don't know"
+    r4 = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="how can you don't know",
+        session_id=session_id
+    )
+    rep4 = r4["reply"].lower()
+    assert "haven't really noticed anything like that" not in rep4
+    assert any(k in rep4 for k in ["rushing", "chest pain", "dizziness", "remember", "office", "overwhelmed", "pain"])
+    assert r4.get("intent_category") in ["CHALLENGE", "CLARIFICATION"] or r4.get("relationship") == "CHALLENGE"
+
+    # Step 5: Confirmation: "Are you sure?"
+    r5 = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="Are you sure?",
+        session_id=session_id
+    )
+    rep5 = r5["reply"].lower()
+    assert "haven't really noticed anything like that" not in rep5
+    assert any(k in rep5 for k in ["sure", "remember", "chest pain", "focus", "dizziness", "yes"])
+
+    # Step 6: New question: "What did you eat for lunch?"
+    r6 = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="What did you eat for lunch?",
+        session_id=session_id
+    )
+    rep6 = r6["reply"].lower()
+    assert "haven't really noticed anything like that" not in rep6
+    assert any(k in rep6 for k in ["lunch", "remember", "eat", "pain"])
+
+    # Step 7: Challenge: "Why can't you remember?"
+    r7 = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="Why can't you remember?",
+        session_id=session_id
+    )
+    rep7 = r7["reply"].lower()
+    assert "haven't really noticed anything like that" not in rep7
+    assert any(k in rep7 for k in ["rushing", "chest pain", "dizziness", "remember", "office", "overwhelmed", "pain"])
+
+    # Step 8: Ungrammatical challenge: "are you made you don't know anything"
+    r8 = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="are you made you don't know anything",
+        session_id=session_id
+    )
+    rep8 = r8["reply"].lower()
+    assert "haven't really noticed anything like that" not in rep8
+    assert any(k in rep8 for k in ["rushing", "chest pain", "dizziness", "remember", "office", "overwhelmed", "pain"])
+
+    # Step 9: Severity question + Confirmation
+    r9 = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="On a scale of 1 to 10, how severe is your discomfort right now?",
+        session_id=session_id
+    )
+    rep9 = r9["reply"].lower()
+    assert "8" in rep9
+
+    r10 = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="Are you sure?",
+        session_id=session_id
+    )
+    rep10 = r10["reply"].lower()
+    assert "8" in rep10
+    assert "haven't really noticed anything like that" not in rep10
+
+

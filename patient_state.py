@@ -78,9 +78,13 @@ class PatientSimulationState:
         self.last_patient_message: str = ""
         self.last_clinician_message: str = ""
         self.last_intent: Optional[str] = None
+        self.last_topic: Optional[str] = None
         self.last_question_topic: Optional[str] = None
+        self.last_slot: Optional[str] = None
         self.last_disclosed_fact_key: Optional[str] = None
         self.last_disclosed_statement: Optional[str] = None
+        self.last_time_reference: Optional[str] = None
+        self.last_patient_fact_state: Optional[str] = None
 
     @classmethod
     def from_case(cls, case_data: Dict[str, Any], session_id: Optional[str] = None) -> "PatientSimulationState":
@@ -262,6 +266,7 @@ class PatientSimulationState:
         self.revealed_facts[fact_key] = fact_statement
         self.revealed_fact_ids.add(fact_key)
         self.last_disclosed_fact_key = fact_key
+        self.last_slot = fact_key
         self.last_disclosed_statement = fact_statement
 
     def is_disclosed(self, fact_key: str) -> bool:
