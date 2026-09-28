@@ -5,6 +5,7 @@ Enforces the Strict Closed-World Tri-State Fact Model: TRUE / FALSE / UNKNOWN to
 Maintains absolute consistency with previously revealed facts.
 """
 
+import re
 from enum import Enum
 from typing import Dict, Any, Optional, List
 from question_classifier import ClassifiedIntent, IntentCategory
