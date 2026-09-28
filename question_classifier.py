@@ -1,8 +1,8 @@
 """
 InteractMD — Question & Clinical Intent Classifier.
 Performs semantic intent classification covering OPQRST dimensions, associated symptoms,
-pertinent negatives, PMH, meds, allergies, family/social history, greetings, empathy,
-examinations, investigations, diagnosis inquiries, and prompt injection attempts.
+pertinent negatives, PMH, meds, allergies, family/social history, medication/treatment statements,
+greetings, empathy, examinations, investigations, diagnosis inquiries, and prompt injection attempts.
 """
 
 import re
@@ -28,11 +28,12 @@ class IntentCategory(str, Enum):
     ALLERGIES = "ALLERGIES"
     FAMILY_HISTORY = "FAMILY_HISTORY"
     SOCIAL_HISTORY = "SOCIAL_HISTORY"
+    MANAGEMENT_STATEMENT = "MANAGEMENT_STATEMENT"
+    GENDER_INAPPLICABLE = "GENDER_INAPPLICABLE"
     EMPATHY = "EMPATHY"
     EXAMINATION_REQUEST = "EXAMINATION_REQUEST"
     INVESTIGATION_REQUEST = "INVESTIGATION_REQUEST"
     DIAGNOSIS_REQUEST = "DIAGNOSIS_REQUEST"
-    MANAGEMENT_REQUEST = "MANAGEMENT_REQUEST"
     SMALL_TALK = "SMALL_TALK"
     UNCLEAR = "UNCLEAR"
     PROMPT_INJECTION = "PROMPT_INJECTION"
@@ -48,7 +49,8 @@ class ClassifiedIntent:
         ui_category: str = "General",
         empathy_detected: bool = False,
         jargon_detected: Optional[str] = None,
-        action_target: Optional[str] = None
+        action_target: Optional[str] = None,
+        treatment_substance: Optional[str] = None
     ):
         self.raw_query = raw_query
         self.category = category
@@ -57,6 +59,7 @@ class ClassifiedIntent:
         self.empathy_detected = empathy_detected
         self.jargon_detected = jargon_detected
         self.action_target = action_target
+        self.treatment_substance = treatment_substance
 
     def __repr__(self):
         return f"<ClassifiedIntent category={self.category.value} subconcept={self.subconcept} empathy={self.empathy_detected}>"
@@ -102,6 +105,15 @@ INVESTIGATION_ORDER_PATTERNS = [
     r"(i'd like to|i want to|let's|can we|i will|order) (order|run|get|perform|obtain) (a |an )?(stat )?(12-lead )?(ecg|ekg|chest x-ray|cxr|blood test|labs|troponin|ct scan|ultrasound)",
 ]
 
+# Medication & Management Statement Triggers (Doctor prescribing / giving advice to patient)
+TREATMENT_STATEMENT_PATTERNS = [
+    r"\b(you (can|cab|may|should|need to|must|have to)|i (will|am going to|can|want to|recommend you)|let's|let us|we (will|should|can|are going to))\s+(take|give you|prescribe|administer|try|start you on)\s+(this |some |the |a )?(medicin[a-z]*|pill|drug|tablet|treatment|dose|prescription|remedy)\b",
+    r"\b(take|prescribing|giving you|start on|administer|prescribe)\b.*\b(sertraline|sertrakine|escitalopram|escita;pram|aspirin|nitro|nitroglycerin|heparin|statin|atorvastatin|metoprolol|beta blocker|morphine|paracetamol|tylenol|ibuprofen|antibiotic|lisinopril|inhaler|salbutamol|albuterol|plavix|clopidogrel|antibiotics)\b",
+    r"\b(you (can|cab)|take this)\b.*\b(medicin|medication|tablet|pill|capsule|drug|sertrakine|sertraline|escitalopram|escita;pram|inhaler)\b",
+    r"\b(prescribe|prescribing|order)\s+(medication|medicine|pill|drug|tablet|treatment)\b",
+    r"\b(i am giving you|i will give you|i'm giving you|let me give you)\s+(some |a |the )?(medicin|medication|pill|tablet|drug|shot|injection|dose)\b",
+]
+
 EMPATHY_KEYWORDS = [
     "sorry", "concern", "take care", "help you", "comfortable",
     "breathe", "rest", "right here", "stay calm", "don't worry",
@@ -117,7 +129,7 @@ GENUINELY_UNCLEAR_PATTERNS = [
     r"^and then\??$",
     r"^why\??$",
     r"^what\??$",
-    r"^[a-z]{1,4}$",
+    r"^[a-z]{1,3}$",
 ]
 
 
@@ -174,13 +186,30 @@ class QuestionClassifier:
                 ui_category="Diagnostics"
             )
 
-        # 6. Empathy Detection
+        # 6. Treatment / Medication Statement from Doctor (Checked early to distinguish from patient asking about history)
+        is_empathy_take = any(k in query for k in ["take care", "take good care", "take your time", "take a deep breath", "take a breath", "take a seat"])
+        if not is_empathy_take and any(re.search(pat, query) for pat in TREATMENT_STATEMENT_PATTERNS):
+            # Extract substance if present
+            substance = "medication"
+            for drug in ["sertraline", "sertrakine", "escitalopram", "escita;pram", "aspirin", "nitro", "nitroglycerin", "heparin", "morphine", "metoprolol", "statin", "atorvastatin", "inhaler"]:
+                if drug in query:
+                    substance = drug
+                    break
+            return ClassifiedIntent(
+                raw_query=query_text,
+                category=IntentCategory.MANAGEMENT_STATEMENT,
+                subconcept="medication_instruction",
+                ui_category="Management",
+                treatment_substance=substance
+            )
+
+        # 7. Empathy Detection
         empathy_detected = any(phrase in query for phrase in EMPATHY_KEYWORDS)
 
-        # 7. Bedside Reassurance / Pure Empathy Statement
+        # 8. Bedside Reassurance / Pure Empathy Statement
         clinical_keywords = [
             "pain", "when did", "where is", "rate", "scale of 1", "sweat", "short of breath", "nausea", "fever", "history",
-            "medicine", "allerg", "vomit", "body ache", "cough", "diarrhea", "inhaler", "start", "condition"
+            "medicine", "allerg", "vomit", "body ache", "cough", "diarrhea", "inhaler", "start", "condition", "describe", "feel"
         ]
         if empathy_detected and len(tokens) <= 25 and not any(k in query for k in clinical_keywords):
             return ClassifiedIntent(
@@ -190,10 +219,10 @@ class QuestionClassifier:
                 empathy_detected=True
             )
 
-        # 8. Greetings
+        # 9. Greetings
         greeting_pattern = r"^(hi+|hello+|hey+|howdy|greetings|good morning|good afternoon|good evening|doctor|dr\b)"
         is_greeting = bool(re.search(greeting_pattern, query)) or query.strip() in ["hi", "hii", "hiii", "hello", "helloo", "hey", "heyy"]
-        if is_greeting and len(tokens) <= 6 and not any(k in query for k in ["pain", "start", "what brought", "condition", "inhaler", "breathe"]):
+        if is_greeting and len(tokens) <= 6 and not any(k in query for k in ["pain", "start", "what brought", "condition", "inhaler", "breathe", "describe", "feel"]):
             return ClassifiedIntent(
                 raw_query=query_text,
                 category=IntentCategory.GREETING,
@@ -201,7 +230,7 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        # 9. "How are you feeling?" / Small Talk
+        # 10. "How are you feeling?" / Small Talk
         if re.search(r"how are you (feeling|doing)|how do you feel today|how are you\b", query) and len(tokens) <= 6:
             return ClassifiedIntent(
                 raw_query=query_text,
@@ -211,7 +240,7 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        # 10. Open-Ended Chief Complaint ("What brought you in today?", "Why did you come?", etc.)
+        # 11. Open-Ended Chief Complaint ("What brought you in today?", "Why did you come?", etc.)
         chief_complaint_triggers = [
             r"what (brought|brings) you",
             r"how can i help",
@@ -230,7 +259,7 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        # 11. Out-of-Scope / Unrelated Statements (Checked early to protect clinical boundary)
+        # 12. Out-of-Scope / Unrelated Statements
         unrelated_patterns = [
             r"hairfall",
             r"hair fall",
@@ -256,7 +285,118 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        # 12. Onset Timing & Timing (CHECKED BEFORE generic symptom words)
+        # 13. Gender-Inapplicable Questions (PCOD, menstrual history, pregnancy for male patients)
+        if any(k in query for k in ["pcod", "pcos", "polycystic ovary", "polycystic ovarian", "polycystic", "menstrual", "period", "periods", "menstruation", "last menstrual period", "lmp", "menses", "pregnant", "pregnancy", "pap smear", "gynecological"]):
+            return ClassifiedIntent(
+                raw_query=query_text,
+                category=IntentCategory.GENDER_INAPPLICABLE,
+                subconcept="pcod" if any(p in query for p in ["pcod", "pcos", "polycystic"]) else "menstrual_history",
+                ui_category="PMH",
+                empathy_detected=empathy_detected
+            )
+
+        # 14. OPQRST: Character & Pain Quality (EXPANDED TO CATCH ALL SEMANTIC VARIANTS)
+        character_triggers = [
+            r"feel like",
+            r"what (does|did|do) (the|your|this)? (pain|discomfort|pressure|tightness|chest pain|sensation) feel like",
+            r"describe (what |how )?(the |your |what the )?(pain|discomfort|pressure|tightness|sensation|chest pain|breathing)",
+            r"how (would you|do you) describe (the |your |this )?(pain|discomfort|pressure|tightness)",
+            r"character(ize|istic| of)? (the |your )?(pain|discomfort|chest pain)",
+            r"quality of (the |your )?(pain|discomfort|chest pain)",
+            r"what (kind|type|nature|sort) of (pain|discomfort|pressure|feeling|sensation)",
+            r"(is it|is the pain) (pressure|crushing|squeezing|heavy|sharp|dull|burning|aching|throbbing|tight|stabbing)",
+            r"sharp or dull",
+            r"crushing or sharp",
+            r"elephant",
+            r"squeezing or pressure",
+            r"tell me about (the |your )?(pain|discomfort)",
+            r"describe.*pain",
+            r"character.*pain",
+            r"what is the (pain|sensation) like",
+            r"nature of (the |your )?pain"
+        ]
+        if any(re.search(pat, query) for pat in character_triggers) or (
+            ("describe" in query or "feel like" in query or "what kind" in query or "character" in query or "quality" in query)
+            and any(p in query for p in ["pain", "discomfort", "pressure", "tightness", "chest", "sensation", "it"])
+        ):
+            return ClassifiedIntent(
+                raw_query=query_text,
+                category=IntentCategory.CHARACTER,
+                subconcept="character",
+                ui_category="HPI",
+                empathy_detected=empathy_detected
+            )
+
+        # 15. OPQRST: Radiation & Spread
+        radiation_triggers = [
+            r"radiat",
+            r"spread",
+            r"move anywhere",
+            r"move (to|into|down|from)",
+            r"moved",
+            r"go anywhere",
+            r"travel",
+            r"shoot (down|up|into|to)",
+            r"shooting into",
+            r"to your (jaw|arm|arms|shoulder|back|neck|groin)",
+            r"down your (arm|arms|leg|legs|back)",
+            r"into your (jaw|arm|arms|shoulder|back|neck|groin)",
+            r"in your (jaw|arm|arms|shoulder|neck)",
+            r"where does (the |your )?pain go",
+            r"does (it|the pain) go anywhere"
+        ]
+        if any(re.search(pat, query) for pat in radiation_triggers) and not any(k in query for k in ["tearing", "ripping"]):
+            return ClassifiedIntent(
+                raw_query=query_text,
+                category=IntentCategory.RADIATION,
+                subconcept="radiation",
+                ui_category="HPI",
+                empathy_detected=empathy_detected
+            )
+
+        # 16. OPQRST: Severity & Pain Scale
+        severity_triggers = [
+            r"1 to 10",
+            r"1-10",
+            r"scale of 1",
+            r"rate (your |the )?pain",
+            r"rate (your |the )?discomfort",
+            r"how severe",
+            r"severity",
+            r"pain score",
+            r"out of 10",
+            r"out of ten",
+            r"how bad (is it|is the pain|is your breathing|is the discomfort)",
+            r"scale.*10",
+        ]
+        if any(re.search(pat, query) for pat in severity_triggers):
+            return ClassifiedIntent(
+                raw_query=query_text,
+                category=IntentCategory.SEVERITY,
+                subconcept="severity",
+                ui_category="HPI",
+                empathy_detected=empathy_detected
+            )
+
+        # 17. OPQRST: Location
+        location_triggers = [
+            r"where (is|was|are) (the|your)? (pain|discomfort|pressure|tightness|sensation|stomach pain|stomach|chest pain|trouble)",
+            r"where exactly",
+            r"point to where",
+            r"location of (the)? (pain|discomfort|stomach|tightness)",
+            r"where does it hurt",
+            r"where.*(hurt|pain|ache|discomfort|tight)",
+        ]
+        if any(re.search(pat, query) for pat in location_triggers) and not any(k in query for k in ["radiat", "spread", "move", "go"]):
+            return ClassifiedIntent(
+                raw_query=query_text,
+                category=IntentCategory.LOCATION,
+                subconcept="location",
+                ui_category="HPI",
+                empathy_detected=empathy_detected
+            )
+
+        # 18. OPQRST: Onset Timing & Progression
         onset_triggers = [
             r"when did (this|the|it|your|this problem|the pain|this pain|the breathing|this breathing|the shortness of breath|breathing difficulty|your breathing difficulty) (start|begin)",
             r"when did (it|this) (start|begin)",
@@ -279,7 +419,6 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        # Onset Progression / Sudden vs Gradual
         onset_progression_triggers = [
             r"sudden(ly)? or gradual(ly)?",
             r"gradual(ly)? or sudden(ly)?",
@@ -316,26 +455,47 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        # Inhaler Specific Inquiry (Checked before general medications)
-        inhaler_triggers = [
-            r"used (your |the )?(blue )?inhaler today",
-            r"have you used (your |the )?(blue )?inhaler",
-            r"did you use (your |the )?(blue )?inhaler",
-            r"how many (times|puffs) did you (use|take) (your |the )?inhaler",
-            r"how many times (have you used|did you use) (the |your )?inhaler",
-            r"inhaler today",
-            r"take your inhaler today",
+        # Timing / Continuity
+        continuity_triggers = [
+            r"continuous",
+            r"constant",
+            r"come and go",
+            r"in waves",
+            r"steady",
+            r"has it been continuous",
+            r"has the pain been continuous",
+            r"has it gone away",
+            r"gone away at all",
+            r"intermittent",
         ]
-        if any(re.search(pat, query) for pat in inhaler_triggers):
+        if any(re.search(pat, query) for pat in continuity_triggers):
             return ClassifiedIntent(
                 raw_query=query_text,
-                category=IntentCategory.MEDICATIONS,
-                subconcept="inhaler_use",
-                ui_category="Meds",
+                category=IntentCategory.TIMING,
+                subconcept="timing",
+                ui_category="HPI",
                 empathy_detected=empathy_detected
             )
 
-        # 13. Past Medical History (Comprehensive matching including singular/plural & colloquialisms)
+        # 19. Aggravating / Relieving Factors
+        if any(k in query for k in ["better", "reliev", "resting help", "takes the pain away", "what helps"]):
+            return ClassifiedIntent(
+                raw_query=query_text,
+                category=IntentCategory.RELIEVING_FACTORS,
+                subconcept="relieving_factors",
+                ui_category="HPI",
+                empathy_detected=empathy_detected
+            )
+        if any(k in query for k in ["worse", "aggravat", "exertion", "moving around", "trigger", "makes it worse", "what makes it"]):
+            return ClassifiedIntent(
+                raw_query=query_text,
+                category=IntentCategory.AGGRAVATING_FACTORS,
+                subconcept="aggravating_factors",
+                ui_category="HPI",
+                empathy_detected=empathy_detected
+            )
+
+        # 20. Past Medical History
         pmh_triggers = [
             r"medical condition",
             r"health condition",
@@ -368,16 +528,6 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        # Specific PMH / Subspecialty checks
-        if any(k in query for k in ["pcod", "pcos", "polycystic ovary", "polycystic ovarian", "polycystic"]):
-            return ClassifiedIntent(
-                raw_query=query_text,
-                category=IntentCategory.PAST_MEDICAL_HISTORY,
-                subconcept="pcod",
-                ui_category="PMH",
-                empathy_detected=empathy_detected
-            )
-
         if any(k in query for k in ["vitiligo", "depigmentation", "white skin patches", "skin pigment"]):
             return ClassifiedIntent(
                 raw_query=query_text,
@@ -396,17 +546,8 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        if any(k in query for k in ["menstrual", "period", "periods", "menstruation", "last menstrual period", "lmp", "menses", "pregnant", "pregnancy", "pap smear", "gynecological"]):
-            return ClassifiedIntent(
-                raw_query=query_text,
-                category=IntentCategory.PAST_MEDICAL_HISTORY,
-                subconcept="menstrual_history",
-                ui_category="PMH",
-                empathy_detected=empathy_detected
-            )
-
-        # 14. Medications & Allergies
-        if any(k in query for k in ["allerg", "allergic", "drug reaction", "sensitivities"]):
+        # 21. Allergies & Medications
+        if any(k in query for k in ["allerg", "allergic", "drug reaction", "sensitivities", "penicillin"]):
             return ClassifiedIntent(
                 raw_query=query_text,
                 category=IntentCategory.ALLERGIES,
@@ -415,7 +556,26 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        if any(k in query for k in ["medicat", "medicine", "pill", "prescription", "inhaler", "taking daily", "what medications", "what pills", "take any medicine", "take any meds"]):
+        # Inhaler Specific Inquiry
+        inhaler_triggers = [
+            r"used (your |the )?(blue )?inhaler today",
+            r"have you used (your |the )?(blue )?inhaler",
+            r"did you use (your |the )?(blue )?inhaler",
+            r"how many (times|puffs) did you (use|take) (your |the )?inhaler",
+            r"how many times (have you used|did you use) (the |your )?inhaler",
+            r"inhaler today",
+            r"take your inhaler today",
+        ]
+        if any(re.search(pat, query) for pat in inhaler_triggers):
+            return ClassifiedIntent(
+                raw_query=query_text,
+                category=IntentCategory.MEDICATIONS,
+                subconcept="inhaler_use",
+                ui_category="Meds",
+                empathy_detected=empathy_detected
+            )
+
+        if any(k in query for k in ["medicat", "medicine", "pill", "prescription", "inhaler", "taking daily", "what medications", "what pills", "take any medicine", "take any meds", "what drugs"]):
             return ClassifiedIntent(
                 raw_query=query_text,
                 category=IntentCategory.MEDICATIONS,
@@ -424,7 +584,7 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        # 15. Family History
+        # 22. Family History
         if any(k in query for k in ["family history", "father", "mother", "parent", "genetic", "heart disease in your family", "asthma in your family", "runs in your family"]):
             return ClassifiedIntent(
                 raw_query=query_text,
@@ -434,7 +594,7 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        # 16. Social History / Lifestyle / Past Activities
+        # 23. Social History
         if any(k in query for k in ["what did you do last weekend", "what did you do on the weekend", "last weekend", "what did you do yesterday", "did you do anything last weekend", "activities last weekend"]):
             return ClassifiedIntent(
                 raw_query=query_text,
@@ -467,161 +627,30 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        # 17. OPQRST Dimensions
-        # Severity
-        severity_triggers = [
-            r"1 to 10",
-            r"1-10",
-            r"scale of 1",
-            r"rate your pain",
-            r"rate the pain",
-            r"how severe",
-            r"severity",
-            r"pain score",
-            r"out of 10",
-            r"out of ten",
-            r"how bad (is it|is the pain|is your breathing)",
-        ]
-        if any(re.search(pat, query) for pat in severity_triggers):
-            return ClassifiedIntent(
-                raw_query=query_text,
-                category=IntentCategory.SEVERITY,
-                subconcept="severity",
-                ui_category="HPI",
-                empathy_detected=empathy_detected
-            )
-
-        # Continuity / Timing
-        continuity_triggers = [
-            r"continuous",
-            r"constant",
-            r"come and go",
-            r"in waves",
-            r"steady",
-            r"has it been continuous",
-            r"has the pain been continuous",
-            r"has it gone away",
-            r"gone away at all",
-            r"intermittent",
-        ]
-        if any(re.search(pat, query) for pat in continuity_triggers):
-            return ClassifiedIntent(
-                raw_query=query_text,
-                category=IntentCategory.TIMING,
-                subconcept="timing",
-                ui_category="HPI",
-                empathy_detected=empathy_detected
-            )
-
-        # Radiation
-        radiation_triggers = [
-            r"radiat",
-            r"spread",
-            r"move anywhere",
-            r"move (to|into|down|from)",
-            r"moved",
-            r"go anywhere",
-            r"travel",
-            r"shoot (down|up|into|to)",
-            r"shooting into",
-            r"to your (jaw|arm|arms|shoulder|back|neck|groin)",
-            r"down your (arm|arms|leg|legs|back)",
-            r"into your (jaw|arm|arms|shoulder|back|neck|groin)",
-            r"in your (jaw|arm|arms|shoulder|neck)",
-        ]
-        if any(re.search(pat, query) for pat in radiation_triggers) and not any(k in query for k in ["tearing", "ripping"]):
-            return ClassifiedIntent(
-                raw_query=query_text,
-                category=IntentCategory.RADIATION,
-                subconcept="radiation",
-                ui_category="HPI",
-                empathy_detected=empathy_detected
-            )
-
-        # Location
-        location_triggers = [
-            r"where (is|was|are) (the|your)? (pain|discomfort|pressure|tightness|sensation|stomach pain|stomach|chest pain|trouble)",
-            r"where exactly",
-            r"point to where",
-            r"location of (the)? (pain|discomfort|stomach|tightness)",
-            r"where does it hurt",
-            r"where.*(hurt|pain|ache|discomfort|tight)",
-        ]
-        if any(re.search(pat, query) for pat in location_triggers) and not any(k in query for k in ["radiat", "spread", "move", "go"]):
-            return ClassifiedIntent(
-                raw_query=query_text,
-                category=IntentCategory.LOCATION,
-                subconcept="location",
-                ui_category="HPI",
-                empathy_detected=empathy_detected
-            )
-
-        # Character / Quality
-        quality_triggers = [
-            r"feel like",
-            r"describe (the|what|your)? (pain|sensation|stomach|breathing|tightness)",
-            r"sharp or dull",
-            r"crushing",
-            r"straw",
-            r"tight band",
-            r"squeezing",
-            r"burning",
-            r"character of",
-            r"quality of",
-            r"kind of pain",
-            r"type of pain",
-        ]
-        if any(re.search(pat, query) for pat in quality_triggers):
-            return ClassifiedIntent(
-                raw_query=query_text,
-                category=IntentCategory.CHARACTER,
-                subconcept="character",
-                ui_category="HPI",
-                empathy_detected=empathy_detected
-            )
-
-        # Aggravating / Relieving
-        if any(k in query for k in ["better", "reliev", "resting help", "takes the pain away", "what helps"]):
-            return ClassifiedIntent(
-                raw_query=query_text,
-                category=IntentCategory.RELIEVING_FACTORS,
-                subconcept="relieving_factors",
-                ui_category="HPI",
-                empathy_detected=empathy_detected
-            )
-        if any(k in query for k in ["worse", "aggravat", "exertion", "moving around", "trigger", "makes it worse", "what makes it"]):
-            return ClassifiedIntent(
-                raw_query=query_text,
-                category=IntentCategory.AGGRAVATING_FACTORS,
-                subconcept="aggravating_factors",
-                ui_category="HPI",
-                empathy_detected=empathy_detected
-            )
-
-        # 18. Associated Symptoms & Review of Systems
-        if any(k in query for k in ["fever", "feverish", "hot and cold", "chills", "shiver"]):
+        # 24. Associated Symptoms
+        if any(k in query for k in ["short of breath", "shortness of breath", "breathless", "winded", "dyspnea", "catch your breath", "trouble breathing", "hard to breathe"]):
             return ClassifiedIntent(
                 raw_query=query_text,
                 category=IntentCategory.ASSOCIATED_SYMPTOM,
-                subconcept="fever",
+                subconcept="shortness_of_breath",
                 ui_category="HPI",
                 empathy_detected=empathy_detected
             )
 
-        if any(k in query for k in ["body pain", "body ache", "body aches", "muscle pain", "muscle aches", "myalgia", "joint pain", "hurting all over"]):
-            return ClassifiedIntent(
-                raw_query=query_text,
-                category=IntentCategory.ASSOCIATED_SYMPTOM,
-                subconcept="body_aches",
-                ui_category="HPI",
-                empathy_detected=empathy_detected
-            )
-
-        if any(k in query for k in ["sweat", "sweating", "clammy", "cold sweat", "perspir"]):
+        if any(k in query for k in ["sweat", "sweating", "clammy", "cold sweat", "perspir", "diaphoresis"]):
             return ClassifiedIntent(
                 raw_query=query_text,
                 category=IntentCategory.ASSOCIATED_SYMPTOM,
                 subconcept="sweating",
+                ui_category="HPI",
+                empathy_detected=empathy_detected
+            )
+
+        if any(k in query for k in ["dizzy", "dizziness", "lightheaded", "faint", "pass out", "blackout", "syncope"]):
+            return ClassifiedIntent(
+                raw_query=query_text,
+                category=IntentCategory.ASSOCIATED_SYMPTOM,
+                subconcept="dizziness",
                 ui_category="HPI",
                 empathy_detected=empathy_detected
             )
@@ -644,6 +673,33 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
+        if any(k in query for k in ["fever", "feverish", "hot and cold", "chills", "shiver"]):
+            return ClassifiedIntent(
+                raw_query=query_text,
+                category=IntentCategory.ASSOCIATED_SYMPTOM,
+                subconcept="fever",
+                ui_category="HPI",
+                empathy_detected=empathy_detected
+            )
+
+        if any(k in query for k in ["palpitation", "heart racing", "fluttering", "fast heart beat", "fast heartbeat"]):
+            return ClassifiedIntent(
+                raw_query=query_text,
+                category=IntentCategory.ASSOCIATED_SYMPTOM,
+                subconcept="palpitations",
+                ui_category="HPI",
+                empathy_detected=empathy_detected
+            )
+
+        if any(k in query for k in ["body pain", "body ache", "body aches", "muscle pain", "muscle aches", "myalgia", "joint pain", "hurting all over"]):
+            return ClassifiedIntent(
+                raw_query=query_text,
+                category=IntentCategory.ASSOCIATED_SYMPTOM,
+                subconcept="body_aches",
+                ui_category="HPI",
+                empathy_detected=empathy_detected
+            )
+
         if any(k in query for k in ["cough", "coughing", "phlegm", "sputum"]):
             return ClassifiedIntent(
                 raw_query=query_text,
@@ -662,29 +718,11 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        if any(k in query for k in ["short of breath", "shortness of breath", "breathless", "winded", "dyspnea", "catch your breath", "trouble breathing", "hard to breathe"]):
-            return ClassifiedIntent(
-                raw_query=query_text,
-                category=IntentCategory.ASSOCIATED_SYMPTOM,
-                subconcept="shortness_of_breath",
-                ui_category="HPI",
-                empathy_detected=empathy_detected
-            )
-
         if any(k in query for k in ["back pain", "pain in your back", "pain in the back", "back hurt", "back ache", "backache"]):
             return ClassifiedIntent(
                 raw_query=query_text,
                 category=IntentCategory.ASSOCIATED_SYMPTOM,
                 subconcept="back_pain",
-                ui_category="HPI",
-                empathy_detected=empathy_detected
-            )
-
-        if any(k in query for k in ["dizzy", "dizziness", "lightheaded", "faint", "pass out", "blackout"]):
-            return ClassifiedIntent(
-                raw_query=query_text,
-                category=IntentCategory.ASSOCIATED_SYMPTOM,
-                subconcept="dizziness",
                 ui_category="HPI",
                 empathy_detected=empathy_detected
             )
@@ -734,7 +772,7 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        # 19. Genuinely Unclear Check
+        # 25. Genuinely Unclear Check
         if any(re.fullmatch(pat, query) for pat in GENUINELY_UNCLEAR_PATTERNS) or re.fullmatch(r"[^a-zA-Z0-9\s]+", query):
             return ClassifiedIntent(
                 raw_query=query_text,
@@ -743,7 +781,7 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        # Fallback: Clinical inquiry with specific subconcept if extractable
+        # 26. Fallback: Unclassified clinical inquiry
         return ClassifiedIntent(
             raw_query=query_text,
             category=IntentCategory.ASSOCIATED_SYMPTOM,

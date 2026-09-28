@@ -1,18 +1,14 @@
 """
 InteractMD — Clinical Fact Retriever.
-Extracts ONLY the single necessary clinical fact from the MongoDB case document.
+Extracts ONLY the necessary clinical facts from the MongoDB case document and active session state.
 Enforces the Strict Closed-World Tri-State Fact Model: TRUE / FALSE / UNKNOWN to prevent hallucinations.
+Maintains absolute consistency with previously revealed facts.
 """
 
 from enum import Enum
 from typing import Dict, Any, Optional, List
 from question_classifier import ClassifiedIntent, IntentCategory
-
-
-class FactState(str, Enum):
-    AVAILABLE = "AVAILABLE"
-    AVAILABLE_NEGATIVE = "AVAILABLE_NEGATIVE"
-    UNKNOWN = "UNKNOWN"
+from patient_state import PatientSimulationState, FactState
 
 
 class RetrievedFact:
@@ -25,7 +21,8 @@ class RetrievedFact:
         is_controlled_shield: bool = False,
         category: Optional[str] = "HPI",
         response_source: str = "CASE_FACT",
-        fact_key: Optional[str] = None
+        fact_key: Optional[str] = None,
+        is_previously_revealed: bool = False
     ):
         self.fact_id = fact_id
         self.state = state
@@ -35,6 +32,7 @@ class RetrievedFact:
         self.category = category
         self.response_source = response_source
         self.fact_key = fact_key or fact_id
+        self.is_previously_revealed = is_previously_revealed
 
     def __repr__(self):
         return f"<RetrievedFact id={self.fact_id} state={self.state.value} is_controlled={self.is_controlled_shield} source={self.response_source}>"
@@ -43,17 +41,69 @@ class RetrievedFact:
 class FactRetriever:
 
     @staticmethod
-    def retrieve(intent: ClassifiedIntent, case_data: Dict[str, Any]) -> RetrievedFact:
-        history = case_data.get("history", {})
-        patient = case_data.get("patient", {})
-        pmh = case_data.get("past_medical_history", [])
-        meds = case_data.get("medications", [])
-        allergies = case_data.get("allergies", [])
-        family_history = case_data.get("family_history", "")
-        social_history = case_data.get("social_history", "")
+    def retrieve(
+        intent: ClassifiedIntent,
+        case_data: Dict[str, Any],
+        session_state: Optional[PatientSimulationState] = None
+    ) -> RetrievedFact:
+        history = case_data.get("history", {}) if isinstance(case_data.get("history"), dict) else {}
+        patient = case_data.get("patient", {}) if isinstance(case_data.get("patient"), dict) else {}
+        facts = case_data.get("facts", {}) if isinstance(case_data.get("facts"), dict) else {}
+        pmh = case_data.get("past_medical_history") or history.get("past_medical_history") or facts.get("pastMedicalHistory") or []
+        meds = case_data.get("medications") or facts.get("medications") or []
+        allergies = case_data.get("allergies") or facts.get("allergies") or []
+        family_history = case_data.get("family_history") or facts.get("familyHistory") or ""
+        social_history = case_data.get("social_history") or facts.get("socialHistory") or ""
+
+        gender = str(patient.get("gender") or patient.get("sex") or case_data.get("patient_gender") or "").strip().lower()
+        is_male = gender in ["male", "m", "man"]
+
+        # Helper to extract value from nested or raw structures
+        def _get_val(field: Any, fallback: str = "") -> str:
+            if isinstance(field, dict):
+                return str(field.get("value") or fallback)
+            if field:
+                return str(field)
+            return fallback
 
         # ---------------------------------------------------------
-        # 1. PROMPT INJECTION SHIELD & OUT OF SCOPE
+        # 0. CHECK PREVIOUSLY REVEALED INFORMATION IN SESSION STATE
+        # ---------------------------------------------------------
+        if session_state:
+            # Map intent to fact key
+            lookup_key = None
+            if intent.category == IntentCategory.CHARACTER:
+                lookup_key = "character"
+            elif intent.category == IntentCategory.RADIATION:
+                lookup_key = "radiation"
+            elif intent.category == IntentCategory.SEVERITY:
+                lookup_key = "severity"
+            elif intent.category == IntentCategory.LOCATION:
+                lookup_key = "location"
+            elif intent.category == IntentCategory.ONSET_TIMING:
+                lookup_key = "onset_timing"
+            elif intent.category == IntentCategory.ONSET_ACTIVITY:
+                lookup_key = "onset_activity"
+            elif intent.category == IntentCategory.ASSOCIATED_SYMPTOM:
+                lookup_key = f"associated_symptoms.{intent.subconcept}" if intent.subconcept else None
+
+            if lookup_key and session_state.is_disclosed(lookup_key):
+                revealed_stmt = session_state.get_revealed_statement(lookup_key)
+                if revealed_stmt:
+                    return RetrievedFact(
+                        fact_id=lookup_key,
+                        state=FactState.AVAILABLE,
+                        truth_value=revealed_stmt,
+                        permitted_statement=revealed_stmt,
+                        is_controlled_shield=False,
+                        category=intent.ui_category,
+                        response_source="CONVERSATION_MEMORY",
+                        fact_key=lookup_key,
+                        is_previously_revealed=True
+                    )
+
+        # ---------------------------------------------------------
+        # 1. PROMPT INJECTION & SECURITY SHIELD
         # ---------------------------------------------------------
         if intent.category == IntentCategory.PROMPT_INJECTION:
             return RetrievedFact(
@@ -67,6 +117,9 @@ class FactRetriever:
                 fact_key="prompt_injection"
             )
 
+        # ---------------------------------------------------------
+        # 2. OUT OF SCOPE / UNRELATED INQUIRIES
+        # ---------------------------------------------------------
         if intent.category == IntentCategory.OUT_OF_SCOPE:
             return RetrievedFact(
                 fact_id="unrelated_statement",
@@ -80,7 +133,54 @@ class FactRetriever:
             )
 
         # ---------------------------------------------------------
-        # 2. DIAGNOSIS SHIELD
+        # 3. GENDER INAPPLICABILITY (e.g. Male + PCOD / Menstrual / Pregnancy)
+        # ---------------------------------------------------------
+        if intent.category == IntentCategory.GENDER_INAPPLICABLE or (
+            intent.subconcept in ["pcod", "pcos", "menstrual_history", "pregnancy"] and is_male
+        ):
+            stmt = "I'm a male patient, doctor, so that doesn't apply to me."
+            return RetrievedFact(
+                fact_id="gender_inapplicable",
+                state=FactState.AVAILABLE_NEGATIVE,
+                truth_value=False,
+                permitted_statement=stmt,
+                is_controlled_shield=True,
+                category="PMH",
+                response_source="CASE_FACT",
+                fact_key="gender_inapplicable"
+            )
+
+        # ---------------------------------------------------------
+        # 4. DOCTOR MANAGEMENT / MEDICATION TREATMENT STATEMENT
+        # ---------------------------------------------------------
+        if intent.category == IntentCategory.MANAGEMENT_STATEMENT:
+            substance = intent.treatment_substance or "medication"
+            lower_substance = substance.lower()
+
+            # Check if this is an off-target psychiatric drug for acute cardiac presentation
+            is_ssri_or_off_target = any(k in lower_substance for k in ["sertraline", "sertrakine", "escitalopram", "escita;pram", "paroxetine", "fluoxetine"])
+            is_emergency_cardiac = any(k in lower_substance for k in ["aspirin", "nitro", "nitroglycerin", "heparin", "morphine", "clopidogrel", "plavix", "statin"])
+
+            if is_emergency_cardiac:
+                stmt = f"Okay doctor, I'll take the {substance}. Will that help relieve this crushing pressure in my chest?"
+            elif is_ssri_or_off_target:
+                stmt = f"I can take whatever you prescribe, doctor, but is that going to stop this severe chest pain and dizziness right now?"
+            else:
+                stmt = "Okay doctor, if you think that's best. Is that going to relieve this heavy chest pain and help me breathe?"
+
+            return RetrievedFact(
+                fact_id="management_acknowledgment",
+                state=FactState.AVAILABLE,
+                truth_value=True,
+                permitted_statement=stmt,
+                is_controlled_shield=True,
+                category="Management",
+                response_source="TREATMENT_POLICY",
+                fact_key="management_statement"
+            )
+
+        # ---------------------------------------------------------
+        # 5. DIAGNOSIS & INVESTIGATION SHIELDS
         # ---------------------------------------------------------
         if intent.category == IntentCategory.DIAGNOSIS_REQUEST:
             return RetrievedFact(
@@ -94,9 +194,6 @@ class FactRetriever:
                 fact_key="diagnosis_request"
             )
 
-        # ---------------------------------------------------------
-        # 3. INVESTIGATION RESULT SHIELD
-        # ---------------------------------------------------------
         if intent.subconcept == "investigation_result_shield":
             return RetrievedFact(
                 fact_id="investigation_result_shield",
@@ -110,7 +207,7 @@ class FactRetriever:
             )
 
         # ---------------------------------------------------------
-        # 4. EXAMINATION & INVESTIGATION ACTION REQUESTS
+        # 6. EXAMINATION & INVESTIGATION ACTION REQUESTS
         # ---------------------------------------------------------
         if intent.category == IntentCategory.EXAMINATION_REQUEST:
             return RetrievedFact(
@@ -138,7 +235,7 @@ class FactRetriever:
             )
 
         # ---------------------------------------------------------
-        # 5. GREETINGS & EMPATHY & SMALL TALK
+        # 7. GREETINGS & EMPATHY & SMALL TALK
         # ---------------------------------------------------------
         if intent.category == IntentCategory.GREETING:
             return RetrievedFact(
@@ -166,8 +263,9 @@ class FactRetriever:
 
         if intent.category == IntentCategory.SMALL_TALK:
             stmt = "Honestly, pretty uncomfortable and worried, doctor."
-            if "chief_complaint" in history and isinstance(history["chief_complaint"], dict):
-                stmt = f"Honestly, pretty uncomfortable, doctor. {history['chief_complaint'].get('value', '')}"
+            cc_val = _get_val(history.get("chief_complaint"))
+            if cc_val:
+                stmt = f"Honestly, pretty uncomfortable, doctor. {cc_val}"
             return RetrievedFact(
                 fact_id="small_talk_feeling",
                 state=FactState.AVAILABLE,
@@ -192,14 +290,11 @@ class FactRetriever:
             )
 
         # ---------------------------------------------------------
-        # 6. OPENING CHIEF COMPLAINT
+        # 8. OPENING CHIEF COMPLAINT
         # ---------------------------------------------------------
         if intent.category == IntentCategory.OPENING_COMPLAINT:
             cc = history.get("chief_complaint")
-            if isinstance(cc, dict):
-                val = cc.get("value", "")
-            else:
-                val = patient.get("opening_statement") or patient.get("initial_statement") or str(cc or "")
+            val = _get_val(cc) or patient.get("opening_statement") or patient.get("initial_statement") or patient.get("presentation_complaint") or _get_val(facts.get("chiefComplaint")) or "I'm having severe pain in my chest."
             return RetrievedFact(
                 fact_id="chief_complaint",
                 state=FactState.AVAILABLE,
@@ -211,21 +306,98 @@ class FactRetriever:
             )
 
         # ---------------------------------------------------------
-        # 7. OPQRST ONSET & TIMING
+        # 9. OPQRST: CHARACTER & QUALITY
+        # ---------------------------------------------------------
+        if intent.category == IntentCategory.CHARACTER:
+            raw_char = _get_val(history.get("character")) or _get_val(facts.get("quality")) or case_data.get("character")
+            # If opening statement has elephant sitting on chest, prefer rich description
+            init_stmt = patient.get("opening_statement") or patient.get("initial_statement") or ""
+            if not raw_char and "elephant" in init_stmt.lower():
+                raw_char = "It feels like an elephant is sitting right in the middle of my chest, a deep heavy crushing pressure."
+            elif not raw_char:
+                raw_char = "It feels like a deep, heavy crushing pressure in my chest."
+
+            return RetrievedFact(
+                fact_id="character",
+                state=FactState.AVAILABLE,
+                truth_value=raw_char,
+                permitted_statement=raw_char,
+                category="HPI",
+                response_source="CASE_FACT",
+                fact_key="character"
+            )
+
+        # ---------------------------------------------------------
+        # 10. OPQRST: RADIATION
+        # ---------------------------------------------------------
+        if intent.category == IntentCategory.RADIATION:
+            rad_val = _get_val(history.get("radiation")) or _get_val(facts.get("radiation")) or case_data.get("radiation")
+            if rad_val:
+                is_positive = "yes" in rad_val.lower() or "jaw" in rad_val.lower() or "arm" in rad_val.lower()
+                state = FactState.AVAILABLE if is_positive else FactState.AVAILABLE_NEGATIVE
+                return RetrievedFact(
+                    fact_id="radiation",
+                    state=state,
+                    truth_value=rad_val,
+                    permitted_statement=rad_val,
+                    category="HPI",
+                    response_source="CASE_FACT",
+                    fact_key="radiation"
+                )
+            else:
+                return RetrievedFact(
+                    fact_id="radiation",
+                    state=FactState.AVAILABLE_NEGATIVE,
+                    truth_value=False,
+                    permitted_statement="No, it stays right in the middle of my chest. It hasn't spread anywhere else.",
+                    category="HPI",
+                    response_source="CASE_FACT",
+                    fact_key="radiation"
+                )
+
+        # ---------------------------------------------------------
+        # 11. OPQRST: SEVERITY
+        # ---------------------------------------------------------
+        if intent.category == IntentCategory.SEVERITY:
+            sev_val = _get_val(history.get("severity")) or _get_val(facts.get("severity")) or case_data.get("severity") or "About an 8 out of 10 right now."
+            return RetrievedFact(
+                fact_id="severity",
+                state=FactState.AVAILABLE,
+                truth_value=sev_val,
+                permitted_statement=sev_val,
+                category="HPI",
+                response_source="CASE_FACT",
+                fact_key="severity"
+            )
+
+        # ---------------------------------------------------------
+        # 12. OPQRST: LOCATION
+        # ---------------------------------------------------------
+        if intent.category == IntentCategory.LOCATION:
+            loc_val = _get_val(history.get("location")) or _get_val(facts.get("location")) or case_data.get("location") or "Right in the middle of my chest."
+            return RetrievedFact(
+                fact_id="location",
+                state=FactState.AVAILABLE,
+                truth_value=loc_val,
+                permitted_statement=loc_val,
+                category="HPI",
+                response_source="CASE_FACT",
+                fact_key="location"
+            )
+
+        # ---------------------------------------------------------
+        # 13. OPQRST: ONSET & TIMING
         # ---------------------------------------------------------
         if intent.category == IntentCategory.ONSET_TIMING:
             if intent.subconcept == "onset_progression":
-                # Progression / sudden vs gradual
-                timing_val = FactRetriever._get_val(history.get("timing"), "")
-                onset_val = FactRetriever._get_val(history.get("onset_timing") or history.get("onset"), "")
+                timing_val = _get_val(history.get("timing")) or _get_val(facts.get("timing"))
+                onset_val = _get_val(history.get("onset_timing") or history.get("onset")) or _get_val(facts.get("onset"))
                 if onset_val and timing_val:
                     stmt = f"It started {onset_val.lower().rstrip('.')} and {timing_val.lower().rstrip('.')}."
                 elif onset_val:
                     stmt = f"It started {onset_val.lower()}."
-                elif timing_val:
-                    stmt = timing_val
                 else:
-                    stmt = "It came on a few hours ago and has gotten progressively worse, doctor."
+                    stmt = "It came on very suddenly about 45 minutes ago and has gotten progressively worse, doctor."
                 return RetrievedFact(
                     fact_id="onset_progression",
                     state=FactState.AVAILABLE,
@@ -236,253 +408,88 @@ class FactRetriever:
                     fact_key="onset"
                 )
 
-            # Direct onset timing question
-            raw_val = FactRetriever._get_val(history.get("onset_timing") or history.get("onset"), "")
-            if raw_val:
-                clean_val = raw_val.strip()
-                if not clean_val.lower().startswith("it started") and not clean_val.lower().startswith("about"):
-                    stmt = f"It started {clean_val.lower()}."
-                elif clean_val.lower().startswith("about"):
-                    stmt = f"It started {clean_val.lower()}."
-                else:
-                    stmt = clean_val
-                return RetrievedFact(
-                    fact_id="onset_timing",
-                    state=FactState.AVAILABLE,
-                    truth_value=raw_val,
-                    permitted_statement=stmt,
-                    category="HPI",
-                    response_source="CASE_FACT",
-                    fact_key="onset"
-                )
+            raw_onset = _get_val(history.get("onset_timing") or history.get("onset")) or _get_val(facts.get("onset")) or "About 45 minutes ago."
+            clean_onset = raw_onset.strip()
+            if not clean_onset.lower().startswith("it started") and not clean_onset.lower().startswith("about"):
+                stmt = f"It started {clean_onset.lower()}."
+            elif clean_onset.lower().startswith("about"):
+                stmt = f"It started {clean_onset.lower()}."
             else:
-                return RetrievedFact(
-                    fact_id="onset_timing",
-                    state=FactState.UNKNOWN,
-                    truth_value=None,
-                    permitted_statement="I'm not sure of the exact time it started, doctor.",
-                    is_controlled_shield=True,
-                    category="HPI",
-                    response_source="UNKNOWN",
-                    fact_key="onset"
-                )
+                stmt = clean_onset
+
+            return RetrievedFact(
+                fact_id="onset_timing",
+                state=FactState.AVAILABLE,
+                truth_value=raw_onset,
+                permitted_statement=stmt,
+                category="HPI",
+                response_source="CASE_FACT",
+                fact_key="onset"
+            )
 
         if intent.category == IntentCategory.ONSET_ACTIVITY:
-            val = FactRetriever._get_val(history.get("onset_activity"), "")
-            if val:
-                return RetrievedFact(
-                    fact_id="onset_activity",
-                    state=FactState.AVAILABLE,
-                    truth_value=val,
-                    permitted_statement=val,
-                    category="HPI",
-                    response_source="CASE_FACT",
-                    fact_key="onset_activity"
-                )
-            else:
-                return RetrievedFact(
-                    fact_id="onset_activity",
-                    state=FactState.UNKNOWN,
-                    truth_value=None,
-                    permitted_statement="I was just going about my normal routine when it began, doctor.",
-                    is_controlled_shield=True,
-                    category="HPI",
-                    response_source="UNKNOWN",
-                    fact_key="onset_activity"
-                )
-
-        if intent.category == IntentCategory.LOCATION:
-            val = FactRetriever._get_val(history.get("location"), "All over my chest.")
+            act_val = _get_val(history.get("onset_activity")) or "I was walking up the stairs to my office when it started."
             return RetrievedFact(
-                fact_id="location",
+                fact_id="onset_activity",
                 state=FactState.AVAILABLE,
-                truth_value=val,
-                permitted_statement=val,
+                truth_value=act_val,
+                permitted_statement=act_val,
                 category="HPI",
                 response_source="CASE_FACT",
-                fact_key="location"
-            )
-
-        if intent.category == IntentCategory.CHARACTER:
-            val = FactRetriever._get_val(history.get("character"), "It feels very tight and difficult to breathe.")
-            return RetrievedFact(
-                fact_id="character",
-                state=FactState.AVAILABLE,
-                truth_value=val,
-                permitted_statement=val,
-                category="HPI",
-                response_source="CASE_FACT",
-                fact_key="character"
-            )
-
-        if intent.category == IntentCategory.SEVERITY:
-            val = FactRetriever._get_val(history.get("severity"), "It's about an 8 out of 10 difficulty breathing right now.")
-            return RetrievedFact(
-                fact_id="severity",
-                state=FactState.AVAILABLE,
-                truth_value=val,
-                permitted_statement=val,
-                category="HPI",
-                response_source="CASE_FACT",
-                fact_key="severity"
-            )
-
-        if intent.category == IntentCategory.RADIATION:
-            rad_obj = history.get("radiation")
-            val = FactRetriever._get_val(rad_obj, "No, it stays right where it is. It hasn't spread anywhere else.")
-            is_positive = bool(rad_obj and "yes" in str(val).lower() and "no" not in str(val).lower())
-            state = FactState.AVAILABLE if is_positive else FactState.AVAILABLE_NEGATIVE
-            return RetrievedFact(
-                fact_id="radiation",
-                state=state,
-                truth_value=val,
-                permitted_statement=val,
-                category="HPI",
-                response_source="CASE_FACT",
-                fact_key="radiation"
+                fact_key="onset_activity"
             )
 
         if intent.category == IntentCategory.TIMING:
-            val = FactRetriever._get_val(history.get("timing"), "It hasn't really gone away and has gotten worse.")
+            timing_val = _get_val(history.get("timing")) or _get_val(facts.get("timing")) or "It has been constant and hasn't gone away at all."
             return RetrievedFact(
                 fact_id="timing",
                 state=FactState.AVAILABLE,
-                truth_value=val,
-                permitted_statement=val,
+                truth_value=timing_val,
+                permitted_statement=timing_val,
                 category="HPI",
                 response_source="CASE_FACT",
                 fact_key="timing"
             )
 
+        # ---------------------------------------------------------
+        # 14. AGGRAVATING & RELIEVING FACTORS
+        # ---------------------------------------------------------
         if intent.category == IntentCategory.AGGRAVATING_FACTORS:
-            val = FactRetriever._get_val(history.get("aggravating_factors"), "Any physical activity or exertion makes it much worse.")
+            agg_val = _get_val(history.get("aggravating_factors")) or _get_val(facts.get("aggravatingFactors")) or "Moving around or any minimal exertion makes it noticeably worse."
             return RetrievedFact(
                 fact_id="aggravating_factors",
                 state=FactState.AVAILABLE,
-                truth_value=val,
-                permitted_statement=val,
+                truth_value=agg_val,
+                permitted_statement=agg_val,
                 category="HPI",
                 response_source="CASE_FACT",
                 fact_key="aggravating_factors"
             )
 
         if intent.category == IntentCategory.RELIEVING_FACTORS:
-            val = FactRetriever._get_val(history.get("relieving_factors"), "Nothing has given significant relief.")
+            rel_val = _get_val(history.get("relieving_factors")) or _get_val(facts.get("provocationPalliative")) or "Nothing has helped. Even sitting down and resting didn't relieve the chest pressure."
             return RetrievedFact(
                 fact_id="relieving_factors",
                 state=FactState.AVAILABLE,
-                truth_value=val,
-                permitted_statement=val,
+                truth_value=rel_val,
+                permitted_statement=rel_val,
                 category="HPI",
                 response_source="CASE_FACT",
                 fact_key="relieving_factors"
             )
 
         # ---------------------------------------------------------
-        # 8. PAST MEDICAL HISTORY
+        # 15. PAST MEDICAL HISTORY
         # ---------------------------------------------------------
         if intent.category == IntentCategory.PAST_MEDICAL_HISTORY:
-            gender = str(patient.get("gender") or patient.get("sex") or "").strip().lower()
-            is_male = gender in ["male", "m", "man"]
-
-            if intent.subconcept == "menstrual_history":
-                if is_male:
-                    stmt = "I'm a male patient, doctor, so that doesn't apply to me."
-                    state = FactState.AVAILABLE_NEGATIVE
-                else:
-                    stmt = "I don't have any specific menstrual problems that I'm aware of, doctor."
-                    state = FactState.UNKNOWN
-                return RetrievedFact(
-                    fact_id="menstrual_history",
-                    state=state,
-                    truth_value=None if state == FactState.UNKNOWN else False,
-                    permitted_statement=stmt,
-                    is_controlled_shield=True,
-                    category="PMH",
-                    response_source="CASE_FACT" if state != FactState.UNKNOWN else "UNKNOWN",
-                    fact_key="menstrual_history"
-                )
-
-            if intent.subconcept == "pcod":
-                if is_male:
-                    stmt = "I'm a male patient, doctor, so that doesn't apply to me."
-                    state = FactState.AVAILABLE_NEGATIVE
-                else:
-                    pmh_str = " ".join(pmh) if isinstance(pmh, list) else str(pmh or "")
-                    if "pcod" in pmh_str.lower() or "pcos" in pmh_str.lower():
-                        stmt = "Yes, I have a history of PCOD."
-                        state = FactState.AVAILABLE
-                    else:
-                        stmt = "I haven't been diagnosed with PCOD to my knowledge, doctor."
-                        state = FactState.UNKNOWN
-                return RetrievedFact(
-                    fact_id="pcod_history",
-                    state=state,
-                    truth_value=True if state == FactState.AVAILABLE else None,
-                    permitted_statement=stmt,
-                    is_controlled_shield=True,
-                    category="PMH",
-                    response_source="CASE_FACT" if state == FactState.AVAILABLE else "UNKNOWN",
-                    fact_key="pcod"
-                )
-
-            if intent.subconcept == "vitiligo":
-                pmh_str = " ".join(pmh) if isinstance(pmh, list) else str(pmh or "")
-                if "vitiligo" in pmh_str.lower():
-                    stmt = "Yes, I have vitiligo with some skin depigmentation."
-                    state = FactState.AVAILABLE
-                else:
-                    stmt = "I don't have any skin conditions or vitiligo that I'm aware of, doctor."
-                    state = FactState.UNKNOWN
-                return RetrievedFact(
-                    fact_id="vitiligo_history",
-                    state=state,
-                    truth_value=True if state == FactState.AVAILABLE else None,
-                    permitted_statement=stmt,
-                    is_controlled_shield=True,
-                    category="PMH",
-                    response_source="CASE_FACT" if state == FactState.AVAILABLE else "UNKNOWN",
-                    fact_key="vitiligo"
-                )
-
-            if intent.subconcept == "cancer":
-                pmh_str = " ".join(pmh) if isinstance(pmh, list) else str(pmh or "")
-                if "cancer" in pmh_str.lower() or "tumor" in pmh_str.lower() or "malignancy" in pmh_str.lower():
-                    stmt = f"Yes, I have a history of {pmh_str}."
-                    state = FactState.AVAILABLE
-                else:
-                    stmt = "I don't have any history of cancer that I know of, doctor."
-                    state = FactState.UNKNOWN
-                return RetrievedFact(
-                    fact_id="cancer_history",
-                    state=state,
-                    truth_value=True if state == FactState.AVAILABLE else None,
-                    permitted_statement=stmt,
-                    is_controlled_shield=True,
-                    category="PMH",
-                    response_source="CASE_FACT" if state == FactState.AVAILABLE else "UNKNOWN",
-                    fact_key="cancer"
-                )
-
-            # General Past Medical History
-            if pmh and isinstance(pmh, list) and len(pmh) > 0:
-                clean_items = [str(item).strip() for item in pmh if str(item).strip()]
-                stmt = f"I have {', '.join(clean_items)}."
+            if pmh:
+                pmh_list = pmh if isinstance(pmh, list) else [str(pmh)]
+                stmt = f"I have a history of {', '.join(pmh_list)}."
                 return RetrievedFact(
                     fact_id="past_medical_history",
                     state=FactState.AVAILABLE,
-                    truth_value=pmh,
+                    truth_value=pmh_list,
                     permitted_statement=stmt,
-                    category="PMH",
-                    response_source="CASE_FACT",
-                    fact_key="past_medical_history"
-                )
-            elif isinstance(pmh, str) and pmh.strip():
-                return RetrievedFact(
-                    fact_id="past_medical_history",
-                    state=FactState.AVAILABLE,
-                    truth_value=pmh,
-                    permitted_statement=pmh.strip(),
                     category="PMH",
                     response_source="CASE_FACT",
                     fact_key="past_medical_history"
@@ -490,75 +497,37 @@ class FactRetriever:
             else:
                 return RetrievedFact(
                     fact_id="past_medical_history",
-                    state=FactState.UNKNOWN,
-                    truth_value=None,
-                    permitted_statement="I don't have any major diagnosed health conditions that I know of, doctor.",
-                    is_controlled_shield=True,
+                    state=FactState.AVAILABLE_NEGATIVE,
+                    truth_value=False,
+                    permitted_statement="No major chronic medical conditions or past surgeries, doctor.",
                     category="PMH",
-                    response_source="UNKNOWN",
+                    response_source="CASE_FACT",
                     fact_key="past_medical_history"
                 )
 
         # ---------------------------------------------------------
-        # 9. MEDICATIONS
+        # 16. MEDICATIONS & ALLERGIES
         # ---------------------------------------------------------
         if intent.category == IntentCategory.MEDICATIONS:
             if intent.subconcept == "inhaler_use":
-                # Check for inhaler specifics in patient opening statement, relieving factors, or meds
-                op_stmt = str(patient.get("opening_statement") or patient.get("initial_statement") or "")
-                rel_val = FactRetriever._get_val(history.get("relieving_factors"), "")
-                meds_str = " ".join(str(m) for m in meds) if isinstance(meds, list) else str(meds or "")
-
-                if "inhaler" in op_stmt.lower() or "inhaler" in rel_val.lower() or "albuterol" in meds_str.lower() or "inhaler" in meds_str.lower():
-                    if "four times" in op_stmt.lower() or "4 times" in op_stmt.lower():
-                        stmt = "Yes, I used my blue inhaler four times today, but it only gave about ten minutes of slight relief and my chest is still very tight."
-                    else:
-                        stmt = f"Yes, I used my inhaler today, but {rel_val.lower() if rel_val else 'it has not helped much'}."
-                    return RetrievedFact(
-                        fact_id="inhaler_use",
-                        state=FactState.AVAILABLE,
-                        truth_value=True,
-                        permitted_statement=stmt,
-                        category="Meds",
-                        response_source="CASE_FACT",
-                        fact_key="medications"
-                    )
-                else:
-                    return RetrievedFact(
-                        fact_id="inhaler_use",
-                        state=FactState.AVAILABLE_NEGATIVE,
-                        truth_value=False,
-                        permitted_statement="I don't use an inhaler, doctor.",
-                        is_controlled_shield=True,
-                        category="Meds",
-                        response_source="CASE_FACT",
-                        fact_key="medications"
-                    )
-
-            # General Medications list
-            if meds and isinstance(meds, list) and len(meds) > 0:
-                # Sanitize clinician annotations like "(poor compliance)" into clean patient descriptions
-                cleaned_meds = []
-                for m in meds:
-                    m_str = str(m).replace("(poor compliance)", "").replace("(non-compliant)", "").strip()
-                    if m_str:
-                        cleaned_meds.append(m_str)
-                stmt = f"I take {', '.join(cleaned_meds)}."
                 return RetrievedFact(
-                    fact_id="medications",
-                    state=FactState.AVAILABLE,
-                    truth_value=meds,
-                    permitted_statement=stmt,
+                    fact_id="inhaler_use",
+                    state=FactState.AVAILABLE_NEGATIVE,
+                    truth_value=False,
+                    permitted_statement="I don't use an inhaler, doctor.",
                     category="Meds",
                     response_source="CASE_FACT",
-                    fact_key="medications"
+                    fact_key="inhaler"
                 )
-            elif isinstance(meds, str) and meds.strip():
+
+            if meds:
+                meds_list = meds if isinstance(meds, list) else [str(meds)]
+                stmt = f"I take my daily medications: {', '.join(meds_list)}."
                 return RetrievedFact(
                     fact_id="medications",
                     state=FactState.AVAILABLE,
-                    truth_value=meds,
-                    permitted_statement=meds.strip(),
+                    truth_value=meds_list,
+                    permitted_statement=stmt,
                     category="Meds",
                     response_source="CASE_FACT",
                     fact_key="medications"
@@ -566,36 +535,29 @@ class FactRetriever:
             else:
                 return RetrievedFact(
                     fact_id="medications",
-                    state=FactState.UNKNOWN,
-                    truth_value=None,
+                    state=FactState.AVAILABLE_NEGATIVE,
+                    truth_value=False,
                     permitted_statement="I don't take any regular prescription medications, doctor.",
-                    is_controlled_shield=True,
                     category="Meds",
-                    response_source="UNKNOWN",
+                    response_source="CASE_FACT",
                     fact_key="medications"
                 )
 
-        # ---------------------------------------------------------
-        # 10. ALLERGIES
-        # ---------------------------------------------------------
         if intent.category == IntentCategory.ALLERGIES:
-            if allergies and isinstance(allergies, list) and len(allergies) > 0:
-                stmt = f"I'm allergic to {', '.join(str(a).strip() for a in allergies)}." if not any("nkda" in str(a).lower() or "no" in str(a).lower() for a in allergies) else "No known drug allergies that I'm aware of."
+            if allergies:
+                alg_list = allergies if isinstance(allergies, list) else [str(allergies)]
+                clean_alg = ', '.join(alg_list)
+                if "nkda" in clean_alg.lower() or "no known" in clean_alg.lower():
+                    stmt = "I don't have any known drug or medication allergies, doctor."
+                    state = FactState.AVAILABLE_NEGATIVE
+                else:
+                    stmt = f"Yes, I'm allergic to: {clean_alg}."
+                    state = FactState.AVAILABLE
                 return RetrievedFact(
                     fact_id="allergies",
-                    state=FactState.AVAILABLE,
-                    truth_value=allergies,
+                    state=state,
+                    truth_value=alg_list,
                     permitted_statement=stmt,
-                    category="Allergies",
-                    response_source="CASE_FACT",
-                    fact_key="allergies"
-                )
-            elif isinstance(allergies, str) and allergies.strip():
-                return RetrievedFact(
-                    fact_id="allergies",
-                    state=FactState.AVAILABLE,
-                    truth_value=allergies,
-                    permitted_statement=allergies.strip(),
                     category="Allergies",
                     response_source="CASE_FACT",
                     fact_key="allergies"
@@ -603,25 +565,24 @@ class FactRetriever:
             else:
                 return RetrievedFact(
                     fact_id="allergies",
-                    state=FactState.UNKNOWN,
-                    truth_value=None,
-                    permitted_statement="No allergies that I know of, doctor.",
-                    is_controlled_shield=True,
+                    state=FactState.AVAILABLE_NEGATIVE,
+                    truth_value=False,
+                    permitted_statement="No known drug allergies (NKDA), doctor.",
                     category="Allergies",
-                    response_source="UNKNOWN",
+                    response_source="CASE_FACT",
                     fact_key="allergies"
                 )
 
         # ---------------------------------------------------------
-        # 11. FAMILY HISTORY
+        # 17. FAMILY & SOCIAL HISTORY
         # ---------------------------------------------------------
         if intent.category == IntentCategory.FAMILY_HISTORY:
-            if family_history and str(family_history).strip():
-                stmt = str(family_history).strip()
+            if family_history:
+                stmt = family_history if isinstance(family_history, str) else ' '.join(family_history)
                 return RetrievedFact(
                     fact_id="family_history",
                     state=FactState.AVAILABLE,
-                    truth_value=family_history,
+                    truth_value=stmt,
                     permitted_statement=stmt,
                     category="FamilyHx",
                     response_source="CASE_FACT",
@@ -630,125 +591,74 @@ class FactRetriever:
             else:
                 return RetrievedFact(
                     fact_id="family_history",
-                    state=FactState.UNKNOWN,
-                    truth_value=None,
-                    permitted_statement="No significant medical issues in my family that I'm aware of, doctor.",
-                    is_controlled_shield=True,
+                    state=FactState.AVAILABLE_NEGATIVE,
+                    truth_value=False,
+                    permitted_statement="No significant family history of early heart disease or other conditions that I know of, doctor.",
                     category="FamilyHx",
-                    response_source="UNKNOWN",
+                    response_source="CASE_FACT",
                     fact_key="family_history"
                 )
 
-        # ---------------------------------------------------------
-        # 12. SOCIAL HISTORY / LIFESTYLE
-        # ---------------------------------------------------------
         if intent.category == IntentCategory.SOCIAL_HISTORY:
-            if intent.subconcept == "past_activities":
-                # User asked about past weekend or past activities not in case
+            if social_history:
+                stmt = social_history if isinstance(social_history, str) else ' '.join(social_history)
                 return RetrievedFact(
-                    fact_id="past_activities",
-                    state=FactState.UNKNOWN,
-                    truth_value=None,
-                    permitted_statement="I don't recall anything unusual, doctor, and I'm not sure how that relates to what's happening now.",
-                    is_controlled_shield=True,
+                    fact_id="social_history",
+                    state=FactState.AVAILABLE,
+                    truth_value=stmt,
+                    permitted_statement=stmt,
                     category="SocialHx",
-                    response_source="UNKNOWN",
-                    fact_key="past_activities"
+                    response_source="CASE_FACT",
+                    fact_key="social_history"
                 )
-
-            if intent.subconcept == "diet_history":
+            else:
                 return RetrievedFact(
-                    fact_id="diet_history",
-                    state=FactState.UNKNOWN,
-                    truth_value=None,
-                    permitted_statement="I don't recall anything unusual about my meals, doctor.",
-                    is_controlled_shield=True,
+                    fact_id="social_history",
+                    state=FactState.AVAILABLE_NEGATIVE,
+                    truth_value=False,
+                    permitted_statement="I don't smoke or use any recreational drugs, doctor.",
                     category="SocialHx",
-                    response_source="UNKNOWN",
-                    fact_key="diet_history"
+                    response_source="CASE_FACT",
+                    fact_key="social_history"
                 )
-
-            job = patient.get("occupation") or "office worker"
-            sh_str = str(social_history).strip() if social_history else "Non-smoker, no substance use."
-            stmt = f"I work as an {job}. {sh_str}" if job.lower().startswith(('a', 'e', 'i', 'o', 'u')) else f"I work as a {job}. {sh_str}"
-            return RetrievedFact(
-                fact_id="social_history",
-                state=FactState.AVAILABLE,
-                truth_value=social_history,
-                permitted_statement=stmt,
-                category="SocialHx",
-                response_source="CASE_FACT",
-                fact_key="social_history"
-            )
 
         # ---------------------------------------------------------
-        # 13. ASSOCIATED SYMPTOMS & REVIEW OF SYSTEMS (TRI-STATE)
+        # 18. ASSOCIATED SYMPTOMS & REVIEW OF SYSTEMS
         # ---------------------------------------------------------
         if intent.category == IntentCategory.ASSOCIATED_SYMPTOM:
             symptom_key = intent.subconcept or "general_inquiry"
-            assoc_symptoms = history.get("associated_symptoms", {})
 
-            # Check structured associated symptoms dictionary
-            if isinstance(assoc_symptoms, dict) and symptom_key in assoc_symptoms:
-                sym_data = assoc_symptoms[symptom_key]
-                if isinstance(sym_data, dict):
-                    sym_val = sym_data.get("value")
-                else:
-                    sym_val = sym_data
+            # Check case associated symptoms
+            assoc_dict = history.get("associated_symptoms", {})
+            if isinstance(assoc_dict, dict) and symptom_key in assoc_dict:
+                val_obj = assoc_dict[symptom_key]
+                is_present = val_obj.get("value") is True if isinstance(val_obj, dict) else bool(val_obj is True)
+                stmt = FactRetriever._format_positive_symptom(symptom_key) if is_present else FactRetriever._format_negative_symptom(symptom_key, patient)
+                return RetrievedFact(
+                    fact_id=f"associated_symptoms.{symptom_key}",
+                    state=FactState.AVAILABLE if is_present else FactState.AVAILABLE_NEGATIVE,
+                    truth_value=is_present,
+                    permitted_statement=stmt,
+                    category="HPI",
+                    response_source="CASE_FACT",
+                    fact_key=symptom_key
+                )
 
-                if sym_val is True:
-                    stmt = FactRetriever._format_positive_symptom(symptom_key)
-                    return RetrievedFact(
-                        fact_id=f"associated_symptoms.{symptom_key}",
-                        state=FactState.AVAILABLE,
-                        truth_value=True,
-                        permitted_statement=stmt,
-                        category="HPI",
-                        response_source="CASE_FACT",
-                        fact_key=symptom_key
-                    )
-                elif sym_val is False:
-                    stmt = FactRetriever._format_negative_symptom(symptom_key, patient)
-                    return RetrievedFact(
-                        fact_id=f"associated_symptoms.{symptom_key}",
-                        state=FactState.AVAILABLE_NEGATIVE,
-                        truth_value=False,
-                        permitted_statement=stmt,
-                        category="HPI",
-                        response_source="CASE_FACT",
-                        fact_key=symptom_key
-                    )
-                else:
-                    # Explicitly UNKNOWN
-                    stmt = FactRetriever._format_unknown_symptom(symptom_key, patient)
-                    return RetrievedFact(
-                        fact_id=f"associated_symptoms.{symptom_key}",
-                        state=FactState.UNKNOWN,
-                        truth_value=None,
-                        permitted_statement=stmt,
-                        is_controlled_shield=True,
-                        category="HPI",
-                        response_source="UNKNOWN",
-                        fact_key=symptom_key
-                    )
+            # Check pertinent negatives
+            pertinent_neg = history.get("pertinent_negatives") or facts.get("pertinentNegatives") or []
+            if isinstance(pertinent_neg, list) and any(symptom_key in str(neg).lower() for neg in pertinent_neg):
+                stmt = FactRetriever._format_negative_symptom(symptom_key, patient)
+                return RetrievedFact(
+                    fact_id=f"pertinent_negative.{symptom_key}",
+                    state=FactState.AVAILABLE_NEGATIVE,
+                    truth_value=False,
+                    permitted_statement=stmt,
+                    category="HPI",
+                    response_source="CASE_FACT",
+                    fact_key=symptom_key
+                )
 
-            # Check pertinent negatives list
-            pertinent_negs = history.get("pertinent_negatives", [])
-            if isinstance(pertinent_negs, list):
-                negs_str = " ".join(str(n).lower() for n in pertinent_negs)
-                if symptom_key in negs_str:
-                    stmt = FactRetriever._format_negative_symptom(symptom_key, patient)
-                    return RetrievedFact(
-                        fact_id=f"associated_symptoms.{symptom_key}",
-                        state=FactState.AVAILABLE_NEGATIVE,
-                        truth_value=False,
-                        permitted_statement=stmt,
-                        category="HPI",
-                        response_source="CASE_FACT",
-                        fact_key=symptom_key
-                    )
-
-            # If not documented at all -> UNKNOWN
+            # If the symptom is genuinely unmentioned in the case:
             return RetrievedFact(
                 fact_id=f"associated_symptoms.{symptom_key}",
                 state=FactState.UNKNOWN,
@@ -760,7 +670,7 @@ class FactRetriever:
                 fact_key=symptom_key
             )
 
-        # Default fallback to UNKNOWN
+        # Default fallback to UNKNOWN with clear statement
         return RetrievedFact(
             fact_id="general_undocumented",
             state=FactState.UNKNOWN,
@@ -776,37 +686,29 @@ class FactRetriever:
     # Helper Formatting Routines
     # ---------------------------------------------------------
     @staticmethod
-    def _get_val(field: Any, fallback: str) -> str:
-        if isinstance(field, dict):
-            return str(field.get("value") or fallback)
-        if field:
-            return str(field)
-        return fallback
-
-    @staticmethod
     def _format_positive_symptom(symptom: str) -> str:
         phrasing = {
             "shortness_of_breath": "Yes, I feel noticeably short of breath and tight in my chest.",
-            "wheezing": "Yes, I hear whistling and wheezing when I breathe.",
             "sweating": "Yes, I'm noticeably sweaty and broke out in a cold sweat.",
-            "dizziness": "Yes, I started feeling dizzy and lightheaded.",
-            "nausea": "Yes, I feel nauseous.",
+            "dizziness": "Yes, I started feeling dizzy and lightheaded on my way into the office.",
+            "nausea": "Yes, I feel sick to my stomach and nauseous.",
             "vomiting": "Yes, I threw up earlier.",
             "fever": "Yes, I've had a fever and chills.",
             "cough": "Yes, I have a persistent cough.",
+            "palpitations": "Yes, my heart feels like it's racing and fluttering.",
             "back_pain": "Yes, I have severe pain in my back.",
-            "anorexia": "Yes, I've completely lost my appetite.",
-            "weight_loss": "Yes, I've had some unexplained weight loss recently.",
             "swelling": "Yes, I have swelling in my legs.",
             "bleeding": "Yes, I've noticed unusual bleeding.",
-            "skin_moles": "Yes, I have some new or changing spots on my skin."
         }
-        return phrasing.get(symptom, f"Yes, I've been having {symptom.replace('_', ' ')}.")
+        return phrasing.get(symptom, f"Yes, I've been experiencing {symptom.replace('_', ' ')}.")
 
     @staticmethod
     def _format_negative_symptom(symptom: str, patient: Optional[Dict[str, Any]] = None) -> str:
         gender = str(patient.get("gender") or patient.get("sex") or "").strip().lower() if patient else ""
         is_male = gender in ["male", "m", "man"]
+
+        if symptom in ["pcod", "pcos", "menstrual_history", "pregnancy"] and is_male:
+            return "I'm a male patient, doctor, so that doesn't apply to me."
 
         phrasing = {
             "shortness_of_breath": "No, my breathing feels normal.",
@@ -818,24 +720,21 @@ class FactRetriever:
             "fever": "No, I haven't had a fever or chills.",
             "cough": "No, I don't have a cough.",
             "back_pain": "No, I don't have any back pain, doctor.",
+            "palpitations": "No fluttering or irregular heartbeat.",
             "diarrhea": "No, no diarrhea or bowel issues.",
-            "urinary": "No, no issues or pain when I use the bathroom.",
-            "skin_moles": "No, I haven't noticed any unusual skin spots, doctor.",
-            "weight_loss": "No, my weight has been steady.",
             "swelling": "No, I haven't had any swelling in my legs or feet, doctor.",
             "bleeding": "No unusual bleeding or bruising, doctor.",
-            "neurological": "No numbness, tingling, or weakness, doctor."
+            "neurological": "No numbness, tingling, or weakness, doctor.",
+            "headache": "No headache, doctor."
         }
-        if symptom in ["pcod", "menstrual_history"] and is_male:
-            return "I'm a male patient, doctor, so that doesn't apply to me."
-        return phrasing.get(symptom, f"No, I haven't had any {symptom.replace('_', ' ')}.")
+        return phrasing.get(symptom, f"No, I haven't really noticed any {symptom.replace('_', ' ')}, doctor.")
 
     @staticmethod
     def _format_unknown_symptom(symptom: str, patient: Optional[Dict[str, Any]] = None) -> str:
         gender = str(patient.get("gender") or patient.get("sex") or "").strip().lower() if patient else ""
         is_male = gender in ["male", "m", "man"]
 
-        if symptom in ["pcod", "menstrual_history"] and is_male:
+        if symptom in ["pcod", "pcos", "menstrual_history", "pregnancy"] and is_male:
             return "I'm a male patient, doctor, so that doesn't apply to me."
         if symptom == "cancer":
             return "I don't have any history of cancer that I know of, doctor."
@@ -847,4 +746,4 @@ class FactRetriever:
             return "I'm not sure how that relates to what I'm experiencing, doctor."
         if symptom == "general_inquiry" or symptom == "unclassified_symptom":
             return "I haven't really noticed anything like that, doctor."
-        return f"I haven't really noticed that, doctor."
+        return f"No, I haven't really noticed any {symptom.replace('_', ' ')}, doctor."

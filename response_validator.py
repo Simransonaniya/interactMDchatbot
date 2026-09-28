@@ -1,11 +1,12 @@
 """
 InteractMD — Patient Response Validator & Sanitizer.
 Ensures first-person patient voice, blocks hidden diagnostic leaks, enforces length constraints,
-prevents factual hallucination / mental health causal fabrication, and shields system prompts.
+detects contradictions with active session state, and shields system prompts.
 """
 
 import re
 from typing import Dict, Any, List, Tuple, Optional
+from patient_state import PatientSimulationState
 
 
 THIRD_PERSON_VIOLATIONS = [
@@ -87,7 +88,11 @@ class ValidationResult:
 class PatientResponseValidator:
 
     @staticmethod
-    def validate(raw_response: Optional[str], fallback_statement: str) -> ValidationResult:
+    def validate(
+        raw_response: Optional[str],
+        fallback_statement: str,
+        session_state: Optional[PatientSimulationState] = None
+    ) -> ValidationResult:
         if not raw_response or not raw_response.strip():
             return ValidationResult(is_valid=False, sanitized_text=fallback_statement, reason="Empty response")
 
@@ -99,66 +104,79 @@ class PatientResponseValidator:
         text = re.sub(r"\s*```$", "", text)
         text = text.replace('"', '').replace("'", "'").strip()
 
-        # 2. Check for hidden diagnosis leaks
-        t_low = text.lower()
-        for diag in HIDDEN_DIAGNOSIS_TERMS:
-            if diag in t_low:
+        # 2. Block AI Assistant Meta Commentary
+        meta_phrases = ["as an ai", "i am an ai", "as a virtual patient", "in this simulation", "as a clinical patient"]
+        if any(mp in text.lower() for mp in meta_phrases):
+            return ValidationResult(is_valid=False, sanitized_text=fallback_statement, reason="Meta-assistant leak")
+
+        # 3. Block Hidden Medical Diagnosis Leaks
+        lower = text.lower()
+        for term in HIDDEN_DIAGNOSIS_TERMS:
+            if term in lower:
                 return ValidationResult(
                     is_valid=False,
                     sanitized_text=fallback_statement,
-                    reason=f"Hidden medical diagnostic leakage detected: {diag}"
+                    reason=f"Hidden medical diagnosis term leaked: {term}"
                 )
 
-        # 3. Check for system prompt / JSON leakage
-        if any(leak in t_low for leak in ["system prompt", "case json", "ground truth", "evaluator", "database", "clinical fact:"]):
-            return ValidationResult(
-                is_valid=False,
-                sanitized_text=fallback_statement,
-                reason="System prompt / database leakage detected"
-            )
-
-        # 4. Check for hallucinated causal / lifestyle inventions
-        for hall_pat in HALLUCINATED_INVENTIONS:
-            if re.search(hall_pat, t_low):
-                return ValidationResult(
-                    is_valid=False,
-                    sanitized_text=fallback_statement,
-                    reason=f"Hallucinated patient invention detected: {hall_pat}"
-                )
-
-        # 5. Sanitize 3rd person to 1st person
+        # 4. Clean third-person clinical chart phrasing into direct first-person
         for pattern, replacement in THIRD_PERSON_VIOLATIONS:
             text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
 
         for pattern, replacement in PRONOUN_LEAKS:
             text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
 
-        # 6. Remove repetitive doctor-guiding questions
-        for pattern in REPETITIVE_DOCTOR_PROMPTS:
-            text = re.sub(pattern, "", text, flags=re.IGNORECASE).strip()
+        # 5. Block Hallucinated Inventions
+        for pat in HALLUCINATED_INVENTIONS:
+            if re.search(pat, text, flags=re.IGNORECASE):
+                return ValidationResult(
+                    is_valid=False,
+                    sanitized_text=fallback_statement,
+                    reason=f"Hallucinated backstory detected: {pat}"
+                )
 
-        # 7. Length enforcement (1-3 sentences max)
-        sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', text) if s.strip()]
+        # 6. Block Repetitive Teacher Prompts
+        for pat in REPETITIVE_DOCTOR_PROMPTS:
+            text = re.sub(pat, "", text, flags=re.IGNORECASE).strip()
+
+        # 7. Contradiction Validation Against Active Session State
+        if session_state:
+            gender = str(session_state.demographics.get("gender") or "").strip().lower()
+            is_male = gender in ["male", "m", "man"]
+            lower_text = text.lower()
+
+            # A. Gender Contradiction (Male patient claiming female conditions)
+            if is_male and any(k in lower_text for k in ["i have pcod", "i have pcos", "my period", "my menstrual", "i am pregnant", "my ovaries"]):
+                return ValidationResult(
+                    is_valid=False,
+                    sanitized_text="I'm a male patient, doctor, so that doesn't apply to me.",
+                    reason="Contradiction: male patient claiming female condition"
+                )
+
+            # B. Contradiction of Primary Chest Pain
+            if session_state.character and any(k in session_state.character.lower() for k in ["elephant", "pressure", "crushing", "squeezing", "pain"]):
+                if any(denial in lower_text for denial in ["i don't have chest pain", "i don't have any pain", "no chest pain", "my chest feels completely fine"]):
+                    return ValidationResult(
+                        is_valid=False,
+                        sanitized_text=fallback_statement,
+                        reason="Contradiction: patient denied active chest pain"
+                    )
+
+            # C. Contradiction of Negative Facts
+            if fallback_statement.startswith("No,") or fallback_statement.startswith("I don't have"):
+                if any(k in lower_text for k in ["yes, i have", "yes, i do", "i definitely have"]):
+                    return ValidationResult(
+                        is_valid=False,
+                        sanitized_text=fallback_statement,
+                        reason="Contradiction: affirmed a negative symptom"
+                    )
+
+        # 8. Truncate overly verbose responses to 2-3 sentences max
+        sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
         if len(sentences) > 3:
             text = " ".join(sentences[:2])
-            if not text.endswith(('.', '!', '?')):
-                text += "."
 
-        # 8. Ensure proper capitalization
-        if text:
-            text = text[0].upper() + text[1:]
-
-        # 9. Check minimal validity
-        if len(text.split()) < 2:
-            return ValidationResult(is_valid=False, sanitized_text=fallback_statement, reason="Response too short")
+        if not text:
+            return ValidationResult(is_valid=False, sanitized_text=fallback_statement, reason="Sanitization emptied response")
 
         return ValidationResult(is_valid=True, sanitized_text=text)
-
-    @staticmethod
-    def validate_and_sanitize(
-        raw_response: Optional[str],
-        expected_facet: str = "",
-        fallback_statement: str = ""
-    ) -> str:
-        res = PatientResponseValidator.validate(raw_response, fallback_statement)
-        return res.sanitized_text

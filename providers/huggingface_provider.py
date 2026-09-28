@@ -40,11 +40,11 @@ class HuggingFaceProvider(LLMProvider):
     ) -> Optional[str]:
         """Synchronous generation using multi-provider InferenceClient."""
         clean_token = self.token.strip()
-        providers = ["featherless-ai", "novita", "nscale", "together"]
+        providers = ["together", "novita", "nscale", "featherless-ai"]
         
         for provider in providers:
             try:
-                client = InferenceClient(provider=provider, token=clean_token, timeout=12.0)
+                client = InferenceClient(provider=provider, token=clean_token, timeout=3.0)
                 res = client.chat.completions.create(
                     model=self.model,
                     messages=messages,
@@ -56,7 +56,7 @@ class HuggingFaceProvider(LLMProvider):
                     text = res.choices[0].message.content
                     if text and len(text.strip()) > 0:
                         return text.strip()
-            except Exception as e:
+            except Exception:
                 # Try next provider
                 continue
 
@@ -65,7 +65,7 @@ class HuggingFaceProvider(LLMProvider):
             url = f"https://router.huggingface.co/hf-inference/models/{self.model}/v1/chat/completions"
             headers = {"Authorization": f"Bearer {clean_token}", "Content-Type": "application/json"}
             payload = {"model": self.model, "messages": messages, "temperature": temp, "max_tokens": max_tokens}
-            with httpx.Client(timeout=8.0) as http_client:
+            with httpx.Client(timeout=3.0) as http_client:
                 r = http_client.post(url, headers=headers, json=payload)
                 if r.status_code == 200:
                     data = r.json()

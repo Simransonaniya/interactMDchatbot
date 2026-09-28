@@ -5,17 +5,19 @@ Authoritative orchestrator for clinical simulation dialogue turns.
 Architecture:
 Learner Question
   ↓
-Load Session & Case from MongoDB
+Load Session & Case from MongoDB / Relational Storage
+  ↓
+Build / Update PatientSimulationState (with Authoritative Revealed Facts)
   ↓
 Classify Intent (QuestionClassifier)
   ↓
-Retrieve Relevant Clinical Fact (FactRetriever)
+Retrieve Relevant Clinical Fact (FactRetriever - Grounded with Session State Memory)
   ↓
 Controlled Disclosure & Closed-World Gate
   ↓
 Generate Focused Layperson Patient Response (HuggingFaceProvider) / Direct Grounded Statement
   ↓
-Validate & Sanitize (ResponseValidator)
+Validate & Sanitize (ResponseValidator - Contradiction Checks)
   ↓
 Update Session State & Persist Dialogue + Events in MongoDB
   ↓
@@ -28,8 +30,9 @@ from typing import Dict, Any, List, Optional
 
 from config import settings
 from mongo_db import mongo_manager
+from patient_state import PatientSimulationState, PatientStateManager, FactState
 from question_classifier import QuestionClassifier, ClassifiedIntent, IntentCategory
-from fact_retriever import FactRetriever, RetrievedFact, FactState
+from fact_retriever import FactRetriever, RetrievedFact
 from disclosure_controller import DisclosureController
 from response_validator import PatientResponseValidator, ValidationResult
 from providers.huggingface_provider import HuggingFaceProvider
@@ -75,7 +78,6 @@ class AIOrchestrator:
             finally:
                 new_loop.close()
 
-
     async def process_turn_async(
         self,
         case_id: str,
@@ -85,10 +87,9 @@ class AIOrchestrator:
     ) -> Dict[str, Any]:
         start_time = time.time()
 
-        # 1. Load authoritative Clinical Case from MongoDB
+        # 1. Load authoritative Clinical Case from MongoDB / Storage
         case_doc = mongo_manager.get_case_by_id(case_id)
         if not case_doc:
-            # Check all cases if id matches loosely
             all_cases = mongo_manager.get_all_cases()
             matched = next((c for c in all_cases if c.get("case_id") == case_id or c.get("id") == case_id), None)
             if matched:
@@ -105,25 +106,43 @@ class AIOrchestrator:
         if not past_msgs and conversation_history:
             past_msgs = conversation_history
 
-        # 3. Classify Learner Intent
+        # 3. Build / Synchronize Active Patient Simulation State
+        session_state = PatientStateManager.get_or_create(
+            case_id=case_id,
+            session_id=session_id,
+            case_data=case_doc,
+            conversation_history=past_msgs
+        )
+
+        # 4. Classify Learner Intent
         intent: ClassifiedIntent = QuestionClassifier.classify(user_message)
 
-        # 4. Retrieve ONLY the single permitted clinical fact from MongoDB
-        fact: RetrievedFact = FactRetriever.retrieve(intent, case_doc)
+        # 5. Retrieve Relevant Clinical Fact (Memory & Case Grounded)
+        fact: RetrievedFact = FactRetriever.retrieve(
+            intent=intent,
+            case_data=case_doc,
+            session_state=session_state
+        )
 
-        # 5. Closed-World Decision & Response Generation
-        patient_profile = case_doc.get("patient", {})
-        patient_name = patient_profile.get("name", "Patient")
-        patient_age = patient_profile.get("age", 45)
-        patient_gender = patient_profile.get("gender") or patient_profile.get("sex", "Unknown")
+        # 6. Closed-World Decision & Response Phrasing
+        patient_name = session_state.demographics.get("name", "Patient")
+        patient_age = session_state.demographics.get("age", 45)
+        patient_gender = session_state.demographics.get("gender", "Unknown")
 
         reply_text = fact.permitted_statement
 
-        # ONLY attempt LLM phrasing if fact is AVAILABLE/KNOWN and NOT a controlled shield
+        # Determine if LLM rephrasing is permitted
         should_use_llm = (
             not fact.is_controlled_shield
+            and not fact.is_previously_revealed
             and fact.state in [FactState.AVAILABLE, FactState.AVAILABLE_NEGATIVE]
-            and intent.category not in [IntentCategory.GREETING, IntentCategory.UNCLEAR, IntentCategory.OUT_OF_SCOPE]
+            and intent.category not in [
+                IntentCategory.GREETING,
+                IntentCategory.UNCLEAR,
+                IntentCategory.OUT_OF_SCOPE,
+                IntentCategory.MANAGEMENT_STATEMENT,
+                IntentCategory.GENDER_INAPPLICABLE
+            ]
         )
 
         if should_use_llm and self.hf_provider.is_configured:
@@ -131,19 +150,22 @@ class AIOrchestrator:
             if fact.permitted_statement.startswith("No,") or fact.state == FactState.AVAILABLE_NEGATIVE:
                 neg_instruction = f" You DO NOT have this symptom. You MUST state: \"{fact.permitted_statement}\"."
 
+            revealed_summary = "; ".join([f"{k}: {v}" for k, v in list(session_state.revealed_facts.items())[:4]])
+
             system_prompt = (
-                f"You are {patient_name}, a {patient_age}-year-old {patient_gender} patient in an educational clinical simulation.\n"
+                f"You are {patient_name}, a {patient_age}-year-old {patient_gender} patient in an emergency medical encounter.\n"
                 f"RULES:\n"
                 f"1. You are a REAL PATIENT. Speak strictly in the FIRST PERSON ('I', 'my', 'me').\n"
-                f"2. You MUST strictly stick to the facts stated in your Clinical Fact: \"{fact.permitted_statement}\".{neg_instruction}\n"
-                f"3. Do NOT invent background activities (e.g. watching TV, waking up, cooking, eating), causes, panic attacks, past doctor check-ups, or unmentioned facts.\n"
-                f"4. Answer ONLY what the doctor asks in a direct, natural 1-2 sentence first-person statement."
+                f"2. You MUST strictly stick to your authorized clinical fact: \"{fact.permitted_statement}\".{neg_instruction}\n"
+                f"3. Previously revealed facts: {revealed_summary if revealed_summary else 'None yet'}.\n"
+                f"4. Do NOT invent diagnoses, background activities, unmentioned medications, or new symptoms.\n"
+                f"5. Answer directly and naturally in 1-2 concise sentences."
             )
 
             user_prompt = (
                 f"Doctor's Question: \"{user_message}\"\n"
                 f"Your Clinical Fact: \"{fact.permitted_statement}\"\n\n"
-                f"State this clinical fact directly and naturally in 1-2 sentences:"
+                f"State this clinical fact directly and naturally as the patient in 1-2 sentences:"
             )
 
             raw_llm_response = None
@@ -154,28 +176,37 @@ class AIOrchestrator:
                     conversation_history=past_msgs[-4:] if past_msgs else []
                 )
             except Exception as e:
-                print(f"[AIOrchestrator Warning] HF LLM call error: {e}")
+                print(f"[AIOrchestrator Warning] LLM call error: {e}")
 
-            # 6. Validate & Sanitize Response
+            # 7. Validate & Sanitize Response
             val_result: ValidationResult = PatientResponseValidator.validate(
                 raw_response=raw_llm_response,
-                fallback_statement=fact.permitted_statement
+                fallback_statement=fact.permitted_statement,
+                session_state=session_state
             )
 
             if val_result.is_valid:
                 clean_text = val_result.sanitized_text
                 fact_text = fact.permitted_statement
+                lower_clean = clean_text.lower()
+                lower_fact = fact_text.lower()
 
-                # If fact is negative, ensure response explicitly denies the symptom
-                if fact_text.startswith("No,") or fact.state == FactState.AVAILABLE_NEGATIVE:
-                    lower_clean = clean_text.lower()
+                # Verify vital clinical keywords were not omitted by LLM rephrasing
+                if intent.category == IntentCategory.ONSET_TIMING and "45" in fact_text and "45" not in clean_text:
+                    reply_text = fact_text
+                elif intent.category == IntentCategory.SEVERITY and "8" in fact_text and "8" not in clean_text:
+                    reply_text = fact_text
+                elif intent.category == IntentCategory.RADIATION and ("jaw" in lower_fact or "arm" in lower_fact) and not ("jaw" in lower_clean or "arm" in lower_clean):
+                    reply_text = fact_text
+                elif intent.category == IntentCategory.CHARACTER and any(k in lower_fact for k in ["elephant", "pressure", "crushing", "squeezing", "heavy"]) and not any(k in lower_clean for k in ["elephant", "pressure", "crushing", "squeezing", "heavy", "chest"]):
+                    reply_text = fact_text
+                elif fact_text.startswith("No,") or fact.state == FactState.AVAILABLE_NEGATIVE:
                     if not any(k in lower_clean for k in ["no", "not", "haven't", "don't", "never", "none"]):
                         reply_text = fact_text
                     elif not lower_clean.startswith("no"):
                         reply_text = f"No, {clean_text}"
                     else:
                         reply_text = clean_text
-                # If fact starts with Yes, ensure positive framing
                 elif fact_text.startswith("Yes,") and not any(k in clean_text.lower() for k in ["yes", "i am", "i do", "i have", "definitely"]):
                     reply_text = f"Yes, {clean_text}"
                 else:
@@ -185,15 +216,19 @@ class AIOrchestrator:
         else:
             reply_text = fact.permitted_statement
 
-        # 7. Persist to MongoDB with internal fact source tracking
-        facts_revealed = [fact.fact_id] if fact.fact_id else []
+        # 8. Update Session State with Revealed Fact
+        if fact.fact_id:
+            session_state.record_disclosure(fact.fact_id, reply_text)
+            if fact.fact_key:
+                session_state.record_disclosure(fact.fact_key, reply_text)
+
+        # 9. Persist to MongoDB / Relational DB
+        facts_revealed = list(session_state.revealed_fact_ids)
 
         if session_id:
-            # Record fact disclosure in session
             if fact.fact_id:
                 DisclosureController.record_disclosure(session_id, fact.fact_id)
 
-            # Save Learner message
             mongo_manager.save_message({
                 "session_id": session_id,
                 "case_id": case_id,
@@ -209,7 +244,6 @@ class AIOrchestrator:
                 "timestamp": start_time
             })
 
-            # Save Patient message with internal response_source metadata
             mongo_manager.save_message({
                 "session_id": session_id,
                 "case_id": case_id,
@@ -229,7 +263,6 @@ class AIOrchestrator:
                 "timestamp": time.time()
             })
 
-            # Record interaction event
             mongo_manager.save_event(session_id, "DIALOGUE_TURN", {
                 "intent": intent.category.value,
                 "fact_id": fact.fact_id,
@@ -237,7 +270,7 @@ class AIOrchestrator:
                 "empathy_detected": intent.empathy_detected
             })
 
-        # 8. Return structured response (learner UI gets clean fields)
+        # 10. Return Structured Response
         return {
             "session_id": session_id,
             "message": {
@@ -253,7 +286,7 @@ class AIOrchestrator:
             "provider": self.provider_name,
             "suggested_topics": [],
             "session_state": {
-                "revealed_fact_ids": list(DisclosureController.get_revealed_facts(session_id)) if session_id else facts_revealed
+                "revealed_fact_ids": facts_revealed
             }
         }
 
