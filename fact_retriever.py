@@ -161,11 +161,9 @@ class FactRetriever:
             # A. Check if confirming / clarifying severity (e.g. 8/10)
             if "severity" in last_fact_key or "8" in last_patient_msg or "8 out of 10" in last_stmt or "8" in raw_lower:
                 sev_val = (session_state.severity if session_state else "") or "8 out of 10"
-                if "out of 10" not in sev_val and "8" in sev_val:
-                    sev_stmt = "about an 8 out of 10"
-                else:
-                    sev_stmt = sev_val if sev_val.startswith("about") or sev_val.startswith("8") else f"about {sev_val}"
-                stmt = f"Yes, doctor. It's {sev_stmt} right now, it's really intense."
+                clean_sev = re.sub(r"^(about\s+|an\s+)+", "", sev_val, flags=re.IGNORECASE).rstrip(".")
+                clean_sev = re.sub(r"\s+right now", "", clean_sev, flags=re.IGNORECASE)
+                stmt = f"Yes, doctor. It's about an {clean_sev} right now, it's really intense."
                 return RetrievedFact(
                     fact_id="clarification_severity",
                     state=FactState.AVAILABLE,
