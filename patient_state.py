@@ -17,6 +17,10 @@ patient_state
 ├── social_history
 ├── physical_findings
 ├── investigations
+├── last_patient_message
+├── last_clinician_message
+├── last_intent
+├── last_disclosed_fact_key
 └── revealed_facts
 """
 
@@ -70,6 +74,14 @@ class PatientSimulationState:
         self.conversation_turns: List[Dict[str, Any]] = []
         self.emotional_state: str = "anxious, in discomfort"
 
+        # Explicit turn tracking
+        self.last_patient_message: str = ""
+        self.last_clinician_message: str = ""
+        self.last_intent: Optional[str] = None
+        self.last_question_topic: Optional[str] = None
+        self.last_disclosed_fact_key: Optional[str] = None
+        self.last_disclosed_statement: Optional[str] = None
+
     @classmethod
     def from_case(cls, case_data: Dict[str, Any], session_id: Optional[str] = None) -> "PatientSimulationState":
         case_id = case_data.get("case_id") or case_data.get("id") or "clinical_case"
@@ -78,6 +90,13 @@ class PatientSimulationState:
         # 1. Demographics & Profile
         patient = case_data.get("patient", {}) if isinstance(case_data, dict) else {}
         gender = patient.get("gender") or patient.get("sex") or case_data.get("patient_gender") or "Unknown"
+        init_stmt = (
+            patient.get("opening_statement")
+            or patient.get("initial_statement")
+            or case_data.get("opening_statement")
+            or case_data.get("initial_statement")
+            or ""
+        )
         state.demographics = {
             "name": patient.get("name") or case_data.get("patient_name") or "Patient",
             "age": patient.get("age") or case_data.get("patient_age") or 45,
@@ -85,8 +104,11 @@ class PatientSimulationState:
             "occupation": patient.get("occupation") or case_data.get("patient_occupation") or "Unknown",
             "personality": patient.get("persona", {}).get("personality", "anxious") if isinstance(patient.get("persona"), dict) else "anxious",
             "emotional_state": patient.get("persona", {}).get("emotional_state", "worried") if isinstance(patient.get("persona"), dict) else "worried",
-            "initial_statement": patient.get("opening_statement") or patient.get("initial_statement") or case_data.get("opening_statement") or case_data.get("initial_statement") or ""
+            "initial_statement": init_stmt
         }
+
+        if init_stmt:
+            state.last_patient_message = init_stmt
 
         # 2. History & OPQRST Facts
         history = case_data.get("history", {}) if isinstance(case_data.get("history"), dict) else {}
@@ -208,17 +230,14 @@ class PatientSimulationState:
         state.family_history = fam if isinstance(fam, str) else " ".join(fam)
 
         # 3. Mark Opening Statement Facts as AUTHORITATIVELY REVEALED
-        init_stmt = state.demographics.get("initial_statement") or ""
         if init_stmt:
             state.revealed_facts["initial_statement"] = init_stmt
             lower_init = init_stmt.lower()
 
             # If opening statement mentions elephant / heavy pressure on chest
             if "elephant" in lower_init or "pressure" in lower_init or "crushing" in lower_init or "chest" in lower_init:
-                if state.character:
-                    state.record_disclosure("character", state.character)
-                else:
-                    state.record_disclosure("character", "It feels like an elephant is sitting right in the middle of my chest.")
+                char_stmt = state.character or "It feels like an elephant is sitting right in the middle of my chest."
+                state.record_disclosure("character", char_stmt)
                 state.record_disclosure("location", "Right in the middle of my chest.")
 
             # If opening statement mentions dizzy / cold sweat
@@ -242,6 +261,8 @@ class PatientSimulationState:
             return
         self.revealed_facts[fact_key] = fact_statement
         self.revealed_fact_ids.add(fact_key)
+        self.last_disclosed_fact_key = fact_key
+        self.last_disclosed_statement = fact_statement
 
     def is_disclosed(self, fact_key: str) -> bool:
         """Check if a specific fact was already revealed."""
@@ -266,7 +287,10 @@ class PatientSimulationState:
             if not text:
                 continue
 
-            if sender in ["patient", "assistant"]:
+            if sender in ["learner", "user", "doctor", "clinician"]:
+                self.last_clinician_message = text
+            elif sender in ["patient", "assistant"]:
+                self.last_patient_message = text
                 lower_text = text.lower()
                 # Track revealed character
                 if "elephant" in lower_text or "heavy" in lower_text or "squeezing" in lower_text or "crushing" in lower_text:
@@ -279,7 +303,7 @@ class PatientSimulationState:
                 if "45 minutes" in lower_text or "minutes ago" in lower_text or "hour ago" in lower_text or "hours ago" in lower_text or "started about" in lower_text or "began about" in lower_text:
                     self.record_disclosure("onset_timing", text)
                 # Track severity
-                if "8 out of 10" in lower_text or "8/10" in lower_text or "severe" in lower_text:
+                if "8 out of 10" in lower_text or "8/10" in lower_text or "severe" in lower_text or "about an 8" in lower_text:
                     self.record_disclosure("severity", text)
                 # Track medications
                 if "lisinopril" in lower_text or "atorvastatin" in lower_text or "aspirin" in lower_text or "inhaler" in lower_text:

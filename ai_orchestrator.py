@@ -9,7 +9,7 @@ Load Session & Case from MongoDB / Relational Storage
   ↓
 Build / Update PatientSimulationState (with Authoritative Revealed Facts)
   ↓
-Classify Intent (QuestionClassifier)
+Classify Intent (QuestionClassifier: HISTORY_QUESTION, CLARIFICATION, CONFIRMATION, EMPATHY_REASSURANCE, MANAGEMENT_STATEMENT, MEDICATION_STATEMENT, DIAGNOSIS_STATEMENT, EXAM_REQUEST, INVESTIGATION_REQUEST, OFF_TOPIC, UNKNOWN)
   ↓
 Retrieve Relevant Clinical Fact (FactRetriever - Grounded with Session State Memory)
   ↓
@@ -114,8 +114,12 @@ class AIOrchestrator:
             conversation_history=past_msgs
         )
 
+        session_state.last_clinician_message = user_message
+
         # 4. Classify Learner Intent
         intent: ClassifiedIntent = QuestionClassifier.classify(user_message)
+        session_state.last_intent = intent.category.value
+        session_state.last_question_topic = intent.subconcept or intent.category.value
 
         # 5. Retrieve Relevant Clinical Fact (Memory & Case Grounded)
         fact: RetrievedFact = FactRetriever.retrieve(
@@ -132,17 +136,31 @@ class AIOrchestrator:
         reply_text = fact.permitted_statement
 
         # Determine if LLM rephrasing is permitted
+        deterministic_intents = [
+            IntentCategory.GREETING,
+            IntentCategory.UNCLEAR,
+            IntentCategory.UNKNOWN,
+            IntentCategory.OUT_OF_SCOPE,
+            IntentCategory.OFF_TOPIC,
+            IntentCategory.CLARIFICATION,
+            IntentCategory.CONFIRMATION,
+            IntentCategory.MANAGEMENT_STATEMENT,
+            IntentCategory.MEDICATION_STATEMENT,
+            IntentCategory.DIAGNOSIS_STATEMENT,
+            IntentCategory.DIAGNOSIS_REQUEST,
+            IntentCategory.EMPATHY,
+            IntentCategory.EMPATHY_REASSURANCE,
+            IntentCategory.EXAMINATION_REQUEST,
+            IntentCategory.EXAM_REQUEST,
+            IntentCategory.INVESTIGATION_REQUEST,
+            IntentCategory.GENDER_INAPPLICABLE
+        ]
+
         should_use_llm = (
             not fact.is_controlled_shield
             and not fact.is_previously_revealed
             and fact.state in [FactState.AVAILABLE, FactState.AVAILABLE_NEGATIVE]
-            and intent.category not in [
-                IntentCategory.GREETING,
-                IntentCategory.UNCLEAR,
-                IntentCategory.OUT_OF_SCOPE,
-                IntentCategory.MANAGEMENT_STATEMENT,
-                IntentCategory.GENDER_INAPPLICABLE
-            ]
+            and intent.category not in deterministic_intents
         )
 
         if should_use_llm and self.hf_provider.is_configured:
@@ -216,7 +234,8 @@ class AIOrchestrator:
         else:
             reply_text = fact.permitted_statement
 
-        # 8. Update Session State with Revealed Fact
+        # 8. Update Session State with Revealed Fact and Last Patient Statement
+        session_state.last_patient_message = reply_text
         if fact.fact_id:
             session_state.record_disclosure(fact.fact_id, reply_text)
             if fact.fact_key:
@@ -238,6 +257,7 @@ class AIOrchestrator:
                 "content": user_message,
                 "metadata_json": {
                     "intent": intent.category.value,
+                    "primary_type": intent.primary_type,
                     "subconcept": intent.subconcept,
                     "empathy_detected": intent.empathy_detected
                 },
@@ -265,6 +285,7 @@ class AIOrchestrator:
 
             mongo_manager.save_event(session_id, "DIALOGUE_TURN", {
                 "intent": intent.category.value,
+                "primary_type": intent.primary_type,
                 "fact_id": fact.fact_id,
                 "response_source": fact.response_source,
                 "empathy_detected": intent.empathy_detected
@@ -279,6 +300,8 @@ class AIOrchestrator:
             },
             "reply": reply_text,
             "category": intent.ui_category,
+            "intent": intent.primary_type,
+            "intent_category": intent.category.value,
             "empathy_detected": intent.empathy_detected,
             "facts_revealed": facts_revealed,
             "response_source": fact.response_source,
@@ -286,7 +309,9 @@ class AIOrchestrator:
             "provider": self.provider_name,
             "suggested_topics": [],
             "session_state": {
-                "revealed_fact_ids": facts_revealed
+                "revealed_fact_ids": facts_revealed,
+                "last_intent": intent.category.value,
+                "last_patient_message": reply_text
             }
         }
 

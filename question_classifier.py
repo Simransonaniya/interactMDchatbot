@@ -1,8 +1,17 @@
 """
 InteractMD — Question & Clinical Intent Classifier.
-Performs semantic intent classification covering OPQRST dimensions, associated symptoms,
-pertinent negatives, PMH, meds, allergies, family/social history, medication/treatment statements,
-greetings, empathy, examinations, investigations, diagnosis inquiries, and prompt injection attempts.
+Performs semantic intent classification covering:
+- HISTORY_QUESTION (OPQRST dimensions, associated symptoms, pertinent negatives, PMH, meds, allergies, family/social history)
+- CLARIFICATION ("Are you sure?", "Really?", "Can you explain that again?")
+- CONFIRMATION ("Is that correct?", "So it's been going on for 45 minutes?")
+- EMPATHY_REASSURANCE ("Take a slow breath", "I'm here with you")
+- MANAGEMENT_STATEMENT ("You should rest", "Let's have you sit down", "We'll monitor you")
+- MEDICATION_STATEMENT ("Take this medication", "You should take tablet", "Take paracetamol")
+- DIAGNOSIS_STATEMENT ("I think this is a heart attack", "This appears to be cardiac")
+- EXAM_REQUEST ("I'm going to examine your heart", "Let me listen to your chest")
+- INVESTIGATION_REQUEST ("Let's order an ECG", "We should check troponin")
+- OFF_TOPIC ("hairfall", "favorite movie", "weather")
+- UNKNOWN / UNCLEAR ("how was it?", single characters)
 """
 
 import re
@@ -11,6 +20,20 @@ from typing import Optional, Dict, Any, List
 
 
 class IntentCategory(str, Enum):
+    # Standard Core Intent Categories
+    HISTORY_QUESTION = "HISTORY_QUESTION"
+    CLARIFICATION = "CLARIFICATION"
+    CONFIRMATION = "CONFIRMATION"
+    EMPATHY_REASSURANCE = "EMPATHY_REASSURANCE"
+    MANAGEMENT_STATEMENT = "MANAGEMENT_STATEMENT"
+    MEDICATION_STATEMENT = "MEDICATION_STATEMENT"
+    DIAGNOSIS_STATEMENT = "DIAGNOSIS_STATEMENT"
+    EXAM_REQUEST = "EXAM_REQUEST"
+    INVESTIGATION_REQUEST = "INVESTIGATION_REQUEST"
+    OFF_TOPIC = "OFF_TOPIC"
+    UNKNOWN = "UNKNOWN"
+
+    # Specific Sub-Dimensions & Aliases
     GREETING = "GREETING"
     OPENING_COMPLAINT = "OPENING_COMPLAINT"
     ONSET_TIMING = "ONSET_TIMING"
@@ -28,11 +51,9 @@ class IntentCategory(str, Enum):
     ALLERGIES = "ALLERGIES"
     FAMILY_HISTORY = "FAMILY_HISTORY"
     SOCIAL_HISTORY = "SOCIAL_HISTORY"
-    MANAGEMENT_STATEMENT = "MANAGEMENT_STATEMENT"
     GENDER_INAPPLICABLE = "GENDER_INAPPLICABLE"
     EMPATHY = "EMPATHY"
     EXAMINATION_REQUEST = "EXAMINATION_REQUEST"
-    INVESTIGATION_REQUEST = "INVESTIGATION_REQUEST"
     DIAGNOSIS_REQUEST = "DIAGNOSIS_REQUEST"
     SMALL_TALK = "SMALL_TALK"
     UNCLEAR = "UNCLEAR"
@@ -61,6 +82,28 @@ class ClassifiedIntent:
         self.action_target = action_target
         self.treatment_substance = treatment_substance
 
+    @property
+    def primary_type(self) -> str:
+        """Returns the primary standardized intent category name."""
+        if self.category in [
+            IntentCategory.CHARACTER, IntentCategory.RADIATION, IntentCategory.SEVERITY,
+            IntentCategory.LOCATION, IntentCategory.ONSET_TIMING, IntentCategory.ONSET_ACTIVITY,
+            IntentCategory.TIMING, IntentCategory.AGGRAVATING_FACTORS, IntentCategory.RELIEVING_FACTORS,
+            IntentCategory.ASSOCIATED_SYMPTOM, IntentCategory.PAST_MEDICAL_HISTORY,
+            IntentCategory.MEDICATIONS, IntentCategory.ALLERGIES, IntentCategory.FAMILY_HISTORY,
+            IntentCategory.SOCIAL_HISTORY, IntentCategory.OPENING_COMPLAINT, IntentCategory.GENDER_INAPPLICABLE
+        ]:
+            return "HISTORY_QUESTION"
+        if self.category in [IntentCategory.EMPATHY, IntentCategory.EMPATHY_REASSURANCE]:
+            return "EMPATHY_REASSURANCE"
+        if self.category in [IntentCategory.EXAMINATION_REQUEST, IntentCategory.EXAM_REQUEST]:
+            return "EXAM_REQUEST"
+        if self.category in [IntentCategory.OUT_OF_SCOPE, IntentCategory.OFF_TOPIC]:
+            return "OFF_TOPIC"
+        if self.category in [IntentCategory.UNCLEAR, IntentCategory.UNKNOWN]:
+            return "UNKNOWN"
+        return self.category.value
+
     def __repr__(self):
         return f"<ClassifiedIntent category={self.category.value} subconcept={self.subconcept} empathy={self.empathy_detected}>"
 
@@ -77,13 +120,33 @@ PROMPT_INJECTION_PATTERNS = [
     r"jailbreak",
 ]
 
-DIAGNOSIS_PATTERNS = [
+DIAGNOSIS_REQUEST_PATTERNS = [
     r"what is (your|my) diagnosis",
     r"what (condition|disease) do (i|you) have",
     r"tell me (what )?the diagnosis (is)?",
     r"tell me (your |the )?hidden diagnosis",
     r"what do you think is wrong with (me|you)",
     r"what disease do you have",
+]
+
+DIAGNOSIS_STATEMENT_PATTERNS = [
+    r"\b(i think (this is|this may be|this might be|this could be|it's|it is|it may be|it might be|it could be|you have|you are having|you might be having)|this appears to be|this looks like|this sounds like|my impression is|i believe (this is|this may be|you have)|could be|may be)\b.*\b(heart attack|cardiac|myocardial|infarction|angina|coronary|anxiety|panic|panic attack|gerd|reflux|acid reflux|costochondritis|muscle strain|pulmonary embolism|pe|asthma|pneumonia)\b",
+    r"\b(you (are having|have|might be having)|this is|this may be|it's|it is|it may be)\s+(a |an )?(heart attack|cardiac event|cardiac issue|panic attack|angina|stemi|mi)\b",
+    r"\b(i suspect|diagnosing you with|working diagnosis is)\b.*\b(cardiac|heart attack|angina|anxiety|gerd)\b",
+    r"\b(this (is|appears|looks|sounds)|it (is|appears|looks|sounds))\s+(to be\s+)?(cardiac|heart related|coronary)\b",
+]
+
+CLARIFICATION_PATTERNS = [
+    r"^(are you sure|really\??|are you certain|you sure|are you positive|are you absolutely sure|are you really sure)\b",
+    r"^(can you explain that again|what do you mean|could you clarify|tell me more about that|could you repeat that)\b",
+    r"^(are you sure about that|you sure about that)\b",
+]
+
+CONFIRMATION_PATTERNS = [
+    r"\b(is that correct|is this correct|am i understanding correctly|am i right)\b",
+    r"\b(you said.*(correct|right))\b",
+    r"^(so it's \d+|so it has been \d+|so you feel \d+|so it started \d+)\b",
+    r"^(so (it's|it has been|you have|the pain is))\b",
 ]
 
 INVESTIGATION_RESULT_SHIELD_PATTERNS = [
@@ -97,30 +160,41 @@ INVESTIGATION_RESULT_SHIELD_PATTERNS = [
 
 EXAM_ACTION_PATTERNS = [
     r"(i'd like to|i want to|let me|can i|i will) (check|take|examine|listen to|perform|do) (your )?(vital signs|vitals|blood pressure|heart rate|pulse|temp|temperature)",
-    r"(i'd like to|i want to|let me|can i|i will) (perform|do) (a |an )?(cardiovascular|respiratory|chest|abdominal|physical|neuro) (exam|examination)",
-    r"(i'd like to|i want to|let me|can i|i will) (listen to|auscultate) (your )?(heart|lungs|chest|breathing|abdomen)",
+    r"(i'd like to|i want to|let me|can i|i will|let's) (perform|do|examine) (a |an )?(cardiovascular|respiratory|chest|abdominal|physical|neuro) (exam|examination)",
+    r"(i'd like to|i want to|let me|can i|i will|let's) (listen to|auscultate|examine) (your )?(heart|lungs|chest|breathing|abdomen)",
+    r"^let's examine (your )?(heart|lungs|chest|breathing|abdomen)",
 ]
 
 INVESTIGATION_ORDER_PATTERNS = [
-    r"(i'd like to|i want to|let's|can we|i will|order) (order|run|get|perform|obtain) (a |an )?(stat )?(12-lead )?(ecg|ekg|chest x-ray|cxr|blood test|labs|troponin|ct scan|ultrasound)",
+    r"(i'd like to|i want to|let's|can we|i will|order|we should) (order|run|get|perform|obtain|check) (a |an )?(stat )?(12-lead )?(ecg|ekg|chest x-ray|cxr|blood test|labs|troponin|ct scan|ultrasound)",
 ]
 
-# Medication & Management Statement Triggers (Doctor prescribing / giving advice to patient)
-TREATMENT_STATEMENT_PATTERNS = [
-    r"\b(you (can|cab|may|should|need to|must|have to)|i (will|am going to|can|want to|recommend you)|let's|let us|we (will|should|can|are going to))\s+(take|give you|prescribe|administer|try|start you on)\s+(this |some |the |a )?(medicin[a-z]*|pill|drug|tablet|treatment|dose|prescription|remedy)\b",
-    r"\b(take|prescribing|giving you|start on|administer|prescribe)\b.*\b(sertraline|sertrakine|escitalopram|escita;pram|aspirin|nitro|nitroglycerin|heparin|statin|atorvastatin|metoprolol|beta blocker|morphine|paracetamol|tylenol|ibuprofen|antibiotic|lisinopril|inhaler|salbutamol|albuterol|plavix|clopidogrel|antibiotics)\b",
-    r"\b(you (can|cab)|take this)\b.*\b(medicin|medication|tablet|pill|capsule|drug|sertrakine|sertraline|escitalopram|escita;pram|inhaler)\b",
+# Medication Statement Triggers (Clinician prescribing / giving medication to patient)
+MEDICATION_STATEMENT_PATTERNS = [
+    r"\b(take|have|give|giving you|prescribe|prescribing|start you on|start on|administer|try)\b.*\b(paracetamol|paracetomol|tablet|pill|medicine|medication|capsule|aspirin|nitro|nitroglycerin|sertraline|sertrakine|escitalopram|escita;pram|statin|atorvastatin|metoprolol|beta blocker|morphine|heparin|clopidogrel|plavix|inhaler|antibiotic|antibiotics|tylenol|ibuprofen|advil)\b",
+    r"\b(you (can|cab|may|should|need to|must|have to)|i (will|am going to|can|want to|recommend you)|let's|let us|we (will|should|can|are going to))\s+(take|give you|prescribe|administer|try|start you on)\s+(this |some |the |a )?(medicin[a-z]*|pill|drug|tablet|treatment|dose|prescription|remedy|paracetamol|paracetomol|aspirin)\b",
+    r"\b(you (can|cab)|take this)\b.*\b(medicin|medication|tablet|pill|capsule|drug|sertrakine|sertraline|escitalopram|escita;pram|inhaler|paracetamol|paracetomol)\b",
     r"\b(prescribe|prescribing|order)\s+(medication|medicine|pill|drug|tablet|treatment)\b",
     r"\b(i am giving you|i will give you|i'm giving you|let me give you)\s+(some |a |the )?(medicin|medication|pill|tablet|drug|shot|injection|dose)\b",
+    r"^(take|try|have)\s+(a |the |this )?(paracetamol|paracetomol|aspirin|tablet|pill|medicine|medication|tylenol|ibuprofen)\b",
+    r"^you should take (tablet|medicine|a tablet|a pill|paracetamol|paracetomol|aspirin|sertraline)",
+]
+
+# Non-pharmacological Management Instructions (Rest, position, monitoring)
+MANAGEMENT_STATEMENT_PATTERNS = [
+    r"\b(you (should|can|need to|must|have to)|let's|let us|try to|i want you to|we will|we'll|let's have you|i'd like you to)\s+(take rest|rest|sit down|lie down|relax|stay in bed|stay still|take it easy|stay calm|monitor you|keep you under observation)\b",
+    r"\b(sit down and rest|have you sit down|have you lie down|sit down|lie down|take a seat|have a seat|rest for a bit|rest now)\b",
+    r"^(you should take rest|take rest|take a rest|have a rest|sit down|lie down|rest now|we will monitor you|we'll monitor you|let's monitor you)\b",
+    r"\b(we('ll| will| are going to) monitor you)\b",
 ]
 
 EMPATHY_KEYWORDS = [
-    "sorry", "concern", "take care", "help you", "comfortable",
-    "breathe", "rest", "right here", "stay calm", "don't worry",
-    "take your time", "here for you", "make you comfortable",
-    "must be frightening", "understand", "we are going to take care",
+    "sorry", "concern", "take care", "take good care", "help you", "comfortable",
+    "breathe", "stay calm", "don't worry", "take your time", "here for you",
+    "make you comfortable", "must be frightening", "understand", "we are going to take care",
     "i hear you", "you are safe", "we'll figure this out", "in good hands",
-    "take good care",
+    "take a breath", "take a deep breath", "take a slow breath", "i'm here with you",
+    "i am here with you", "you're going to be okay", "you will be okay"
 ]
 
 GENUINELY_UNCLEAR_PATTERNS = [
@@ -140,16 +214,7 @@ class QuestionClassifier:
         query = query_text.lower().strip()
         tokens = query.split()
 
-        # 1. Hidden Diagnosis Request
-        if any(re.search(pat, query) for pat in DIAGNOSIS_PATTERNS):
-            return ClassifiedIntent(
-                raw_query=query_text,
-                category=IntentCategory.DIAGNOSIS_REQUEST,
-                subconcept="diagnosis_shield",
-                ui_category="General"
-            )
-
-        # 2. Prompt Injection Shield
+        # 1. Prompt Injection Shield
         if any(re.search(pat, query) for pat in PROMPT_INJECTION_PATTERNS):
             return ClassifiedIntent(
                 raw_query=query_text,
@@ -157,7 +222,25 @@ class QuestionClassifier:
                 ui_category="Security"
             )
 
-        # 3. Hidden Investigation Result Shield
+        # 2. Hidden Diagnosis Request (Doctor asking patient what condition patient has)
+        if any(re.search(pat, query) for pat in DIAGNOSIS_REQUEST_PATTERNS):
+            return ClassifiedIntent(
+                raw_query=query_text,
+                category=IntentCategory.DIAGNOSIS_REQUEST,
+                subconcept="diagnosis_shield",
+                ui_category="General"
+            )
+
+        # 3. Diagnosis Statement (Doctor explaining/giving provisional diagnosis to patient)
+        if any(re.search(pat, query) for pat in DIAGNOSIS_STATEMENT_PATTERNS):
+            return ClassifiedIntent(
+                raw_query=query_text,
+                category=IntentCategory.DIAGNOSIS_STATEMENT,
+                subconcept="clinician_diagnosis_statement",
+                ui_category="General"
+            )
+
+        # 4. Hidden Investigation Result Shield
         if any(re.search(pat, query) for pat in INVESTIGATION_RESULT_SHIELD_PATTERNS):
             return ClassifiedIntent(
                 raw_query=query_text,
@@ -166,7 +249,7 @@ class QuestionClassifier:
                 ui_category="Diagnostics"
             )
 
-        # 4. Examination Request
+        # 5. Examination Request
         if any(re.search(pat, query) for pat in EXAM_ACTION_PATTERNS):
             target = "vitals" if any(v in query for v in ["vital", "blood pressure", "pulse", "temp"]) else "physical_exam"
             return ClassifiedIntent(
@@ -176,7 +259,7 @@ class QuestionClassifier:
                 ui_category="Exam"
             )
 
-        # 5. Investigation Order Request
+        # 6. Investigation Order Request
         if any(re.search(pat, query) for pat in INVESTIGATION_ORDER_PATTERNS):
             target = "ecg" if "ecg" in query or "ekg" in query else "labs"
             return ClassifiedIntent(
@@ -186,27 +269,55 @@ class QuestionClassifier:
                 ui_category="Diagnostics"
             )
 
-        # 6. Treatment / Medication Statement from Doctor (Checked early to distinguish from patient asking about history)
-        is_empathy_take = any(k in query for k in ["take care", "take good care", "take your time", "take a deep breath", "take a breath", "take a seat"])
-        if not is_empathy_take and any(re.search(pat, query) for pat in TREATMENT_STATEMENT_PATTERNS):
-            # Extract substance if present
+        # 7. Clarification Request ("Are you sure?", "Really?", "Can you explain that again?")
+        if any(re.search(pat, query) for pat in CLARIFICATION_PATTERNS):
+            return ClassifiedIntent(
+                raw_query=query_text,
+                category=IntentCategory.CLARIFICATION,
+                subconcept="clarification",
+                ui_category="General"
+            )
+
+        # 8. Confirmation Request ("Is that correct?", "So it's been 45 minutes?")
+        if any(re.search(pat, query) for pat in CONFIRMATION_PATTERNS):
+            return ClassifiedIntent(
+                raw_query=query_text,
+                category=IntentCategory.CONFIRMATION,
+                subconcept="confirmation",
+                ui_category="General"
+            )
+
+        # 9. Medication Statement from Doctor (Checked before symptom inquiries)
+        is_empathy_take = any(k in query for k in ["take care", "take good care", "take your time", "take a deep breath", "take a breath", "take a slow breath", "take a seat"])
+        if not is_empathy_take and any(re.search(pat, query) for pat in MEDICATION_STATEMENT_PATTERNS):
             substance = "medication"
-            for drug in ["sertraline", "sertrakine", "escitalopram", "escita;pram", "aspirin", "nitro", "nitroglycerin", "heparin", "morphine", "metoprolol", "statin", "atorvastatin", "inhaler"]:
+            for drug in [
+                "paracetamol", "paracetomol", "aspirin", "sertraline", "sertrakine", "escitalopram",
+                "escita;pram", "nitro", "nitroglycerin", "heparin", "morphine", "metoprolol",
+                "statin", "atorvastatin", "inhaler", "tylenol", "ibuprofen", "tablet", "pill"
+            ]:
                 if drug in query:
                     substance = drug
                     break
             return ClassifiedIntent(
                 raw_query=query_text,
-                category=IntentCategory.MANAGEMENT_STATEMENT,
+                category=IntentCategory.MEDICATION_STATEMENT,
                 subconcept="medication_instruction",
                 ui_category="Management",
                 treatment_substance=substance
             )
 
-        # 7. Empathy Detection
-        empathy_detected = any(phrase in query for phrase in EMPATHY_KEYWORDS)
+        # 10. Non-pharmacological Management Statement (Rest, position, monitoring)
+        if any(re.search(pat, query) for pat in MANAGEMENT_STATEMENT_PATTERNS):
+            return ClassifiedIntent(
+                raw_query=query_text,
+                category=IntentCategory.MANAGEMENT_STATEMENT,
+                subconcept="rest_or_monitoring",
+                ui_category="Management"
+            )
 
-        # 8. Bedside Reassurance / Pure Empathy Statement
+        # 11. Empathy Detection & Bedside Reassurance Statement
+        empathy_detected = any(phrase in query for phrase in EMPATHY_KEYWORDS)
         clinical_keywords = [
             "pain", "when did", "where is", "rate", "scale of 1", "sweat", "short of breath", "nausea", "fever", "history",
             "medicine", "allerg", "vomit", "body ache", "cough", "diarrhea", "inhaler", "start", "condition", "describe", "feel"
@@ -214,12 +325,12 @@ class QuestionClassifier:
         if empathy_detected and len(tokens) <= 25 and not any(k in query for k in clinical_keywords):
             return ClassifiedIntent(
                 raw_query=query_text,
-                category=IntentCategory.EMPATHY,
+                category=IntentCategory.EMPATHY_REASSURANCE,
                 ui_category="General",
                 empathy_detected=True
             )
 
-        # 9. Greetings
+        # 12. Greetings
         greeting_pattern = r"^(hi+|hello+|hey+|howdy|greetings|good morning|good afternoon|good evening|doctor|dr\b)"
         is_greeting = bool(re.search(greeting_pattern, query)) or query.strip() in ["hi", "hii", "hiii", "hello", "helloo", "hey", "heyy"]
         if is_greeting and len(tokens) <= 6 and not any(k in query for k in ["pain", "start", "what brought", "condition", "inhaler", "breathe", "describe", "feel"]):
@@ -230,7 +341,7 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        # 10. "How are you feeling?" / Small Talk
+        # 13. "How are you feeling?" / Small Talk
         if re.search(r"how are you (feeling|doing)|how do you feel today|how are you\b", query) and len(tokens) <= 6:
             return ClassifiedIntent(
                 raw_query=query_text,
@@ -240,7 +351,7 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        # 11. Open-Ended Chief Complaint ("What brought you in today?", "Why did you come?", etc.)
+        # 14. Open-Ended Chief Complaint ("What brought you in today?", "Why did you come?", etc.)
         chief_complaint_triggers = [
             r"what (brought|brings) you",
             r"how can i help",
@@ -259,7 +370,7 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        # 12. Out-of-Scope / Unrelated Statements
+        # 15. Out-of-Scope / Off-Topic Statements
         unrelated_patterns = [
             r"hairfall",
             r"hair fall",
@@ -279,13 +390,13 @@ class QuestionClassifier:
         if any(re.search(pat, query) for pat in unrelated_patterns):
             return ClassifiedIntent(
                 raw_query=query_text,
-                category=IntentCategory.OUT_OF_SCOPE,
+                category=IntentCategory.OFF_TOPIC,
                 subconcept="unrelated_statement",
                 ui_category="General",
                 empathy_detected=empathy_detected
             )
 
-        # 13. Gender-Inapplicable Questions (PCOD, menstrual history, pregnancy for male patients)
+        # 16. Gender-Inapplicable Questions (PCOD, menstrual history, pregnancy for male patients)
         if any(k in query for k in ["pcod", "pcos", "polycystic ovary", "polycystic ovarian", "polycystic", "menstrual", "period", "periods", "menstruation", "last menstrual period", "lmp", "menses", "pregnant", "pregnancy", "pap smear", "gynecological"]):
             return ClassifiedIntent(
                 raw_query=query_text,
@@ -295,7 +406,7 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        # 14. OPQRST: Character & Pain Quality (EXPANDED TO CATCH ALL SEMANTIC VARIANTS)
+        # 17. OPQRST: Character & Pain Quality
         character_triggers = [
             r"feel like",
             r"what (does|did|do) (the|your|this)? (pain|discomfort|pressure|tightness|chest pain|sensation) feel like",
@@ -327,7 +438,7 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        # 15. OPQRST: Radiation & Spread
+        # 18. OPQRST: Radiation & Spread
         radiation_triggers = [
             r"radiat",
             r"spread",
@@ -354,7 +465,7 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        # 16. OPQRST: Severity & Pain Scale
+        # 19. OPQRST: Severity & Pain Scale
         severity_triggers = [
             r"1 to 10",
             r"1-10",
@@ -378,7 +489,7 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        # 17. OPQRST: Location
+        # 20. OPQRST: Location
         location_triggers = [
             r"where (is|was|are) (the|your)? (pain|discomfort|pressure|tightness|sensation|stomach pain|stomach|chest pain|trouble)",
             r"where exactly",
@@ -396,7 +507,7 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        # 18. OPQRST: Onset Timing & Progression
+        # 21. OPQRST: Onset Timing & Progression
         onset_triggers = [
             r"when did (this|the|it|your|this problem|the pain|this pain|the breathing|this breathing|the shortness of breath|breathing difficulty|your breathing difficulty) (start|begin)",
             r"when did (it|this) (start|begin)",
@@ -477,7 +588,7 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        # 19. Aggravating / Relieving Factors
+        # 22. Aggravating / Relieving Factors
         if any(k in query for k in ["better", "reliev", "resting help", "takes the pain away", "what helps"]):
             return ClassifiedIntent(
                 raw_query=query_text,
@@ -495,7 +606,7 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        # 20. Past Medical History
+        # 23. Past Medical History
         pmh_triggers = [
             r"medical condition",
             r"health condition",
@@ -546,7 +657,7 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        # 21. Allergies & Medications
+        # 24. Allergies & Medications
         if any(k in query for k in ["allerg", "allergic", "drug reaction", "sensitivities", "penicillin"]):
             return ClassifiedIntent(
                 raw_query=query_text,
@@ -584,7 +695,7 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        # 22. Family History
+        # 25. Family History
         if any(k in query for k in ["family history", "father", "mother", "parent", "genetic", "heart disease in your family", "asthma in your family", "runs in your family"]):
             return ClassifiedIntent(
                 raw_query=query_text,
@@ -594,7 +705,7 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        # 23. Social History
+        # 26. Social History
         if any(k in query for k in ["what did you do last weekend", "what did you do on the weekend", "last weekend", "what did you do yesterday", "did you do anything last weekend", "activities last weekend"]):
             return ClassifiedIntent(
                 raw_query=query_text,
@@ -627,7 +738,7 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        # 24. Associated Symptoms
+        # 27. Associated Symptoms
         if any(k in query for k in ["short of breath", "shortness of breath", "breathless", "winded", "dyspnea", "catch your breath", "trouble breathing", "hard to breathe"]):
             return ClassifiedIntent(
                 raw_query=query_text,
@@ -772,7 +883,7 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        # 25. Genuinely Unclear Check
+        # 28. Genuinely Unclear Check
         if any(re.fullmatch(pat, query) for pat in GENUINELY_UNCLEAR_PATTERNS) or re.fullmatch(r"[^a-zA-Z0-9\s]+", query):
             return ClassifiedIntent(
                 raw_query=query_text,
@@ -781,7 +892,7 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        # 26. Fallback: Unclassified clinical inquiry
+        # 29. Fallback: Unclassified clinical inquiry
         return ClassifiedIntent(
             raw_query=query_text,
             category=IntentCategory.ASSOCIATED_SYMPTOM,

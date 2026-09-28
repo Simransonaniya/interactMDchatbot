@@ -70,7 +70,6 @@ class FactRetriever:
         # 0. CHECK PREVIOUSLY REVEALED INFORMATION IN SESSION STATE
         # ---------------------------------------------------------
         if session_state:
-            # Map intent to fact key
             lookup_key = None
             if intent.category == IntentCategory.CHARACTER:
                 lookup_key = "character"
@@ -118,9 +117,9 @@ class FactRetriever:
             )
 
         # ---------------------------------------------------------
-        # 2. OUT OF SCOPE / UNRELATED INQUIRIES
+        # 2. OUT OF SCOPE / OFF TOPIC
         # ---------------------------------------------------------
-        if intent.category == IntentCategory.OUT_OF_SCOPE:
+        if intent.category in [IntentCategory.OUT_OF_SCOPE, IntentCategory.OFF_TOPIC]:
             return RetrievedFact(
                 fact_id="unrelated_statement",
                 state=FactState.UNKNOWN,
@@ -129,7 +128,7 @@ class FactRetriever:
                 is_controlled_shield=True,
                 category="General",
                 response_source="UNKNOWN",
-                fact_key="out_of_scope"
+                fact_key="off_topic"
             )
 
         # ---------------------------------------------------------
@@ -151,36 +150,161 @@ class FactRetriever:
             )
 
         # ---------------------------------------------------------
-        # 4. DOCTOR MANAGEMENT / MEDICATION TREATMENT STATEMENT
+        # 4. CLARIFICATION ("Are you sure?", "Really?", "Can you explain that again?")
+        # ---------------------------------------------------------
+        if intent.category in [IntentCategory.CLARIFICATION, IntentCategory.CONFIRMATION]:
+            last_patient_msg = (session_state.last_patient_message if session_state else "") or ""
+            last_fact_key = (session_state.last_disclosed_fact_key if session_state else "") or ""
+            last_stmt = (session_state.last_disclosed_statement if session_state else "") or ""
+            raw_lower = intent.raw_query.lower()
+
+            # A. Check if confirming / clarifying severity (e.g. 8/10)
+            if "severity" in last_fact_key or "8" in last_patient_msg or "8 out of 10" in last_stmt or "8" in raw_lower:
+                sev_val = (session_state.severity if session_state else "") or "8 out of 10"
+                if "out of 10" not in sev_val and "8" in sev_val:
+                    sev_stmt = "about an 8 out of 10"
+                else:
+                    sev_stmt = sev_val if sev_val.startswith("about") or sev_val.startswith("8") else f"about {sev_val}"
+                stmt = f"Yes, doctor. It's {sev_stmt} right now, it's really intense."
+                return RetrievedFact(
+                    fact_id="clarification_severity",
+                    state=FactState.AVAILABLE,
+                    truth_value=True,
+                    permitted_statement=stmt,
+                    is_controlled_shield=True,
+                    category="HPI",
+                    response_source="CONVERSATION_MEMORY",
+                    fact_key="severity"
+                )
+
+            # B. Check if confirming / clarifying character (elephant on chest / pressure)
+            if "character" in last_fact_key or "elephant" in last_patient_msg.lower() or "pressure" in last_patient_msg.lower():
+                stmt = "Yes, doctor. It really feels like an elephant is sitting right in the middle of my chest."
+                return RetrievedFact(
+                    fact_id="clarification_character",
+                    state=FactState.AVAILABLE,
+                    truth_value=True,
+                    permitted_statement=stmt,
+                    is_controlled_shield=True,
+                    category="HPI",
+                    response_source="CONVERSATION_MEMORY",
+                    fact_key="character"
+                )
+
+            # C. Check if confirming / clarifying onset (45 minutes)
+            if "onset" in last_fact_key or "45 minutes" in last_patient_msg.lower() or "45" in raw_lower:
+                stmt = "Yes, doctor, that's correct. It started about 45 minutes ago."
+                return RetrievedFact(
+                    fact_id="clarification_onset",
+                    state=FactState.AVAILABLE,
+                    truth_value=True,
+                    permitted_statement=stmt,
+                    is_controlled_shield=True,
+                    category="HPI",
+                    response_source="CONVERSATION_MEMORY",
+                    fact_key="onset_timing"
+                )
+
+            # D. Check if confirming / clarifying radiation
+            if "radiation" in last_fact_key or "jaw" in last_patient_msg.lower() or "arm" in last_patient_msg.lower():
+                stmt = "Yes, doctor. It definitely spreads up into my jaw and down my left arm."
+                return RetrievedFact(
+                    fact_id="clarification_radiation",
+                    state=FactState.AVAILABLE,
+                    truth_value=True,
+                    permitted_statement=stmt,
+                    is_controlled_shield=True,
+                    category="HPI",
+                    response_source="CONVERSATION_MEMORY",
+                    fact_key="radiation"
+                )
+
+            # E. General clarification affirmation
+            stmt = "Yes, doctor, I'm sure. That's definitely how it feels right now."
+            return RetrievedFact(
+                fact_id="clarification_general",
+                state=FactState.AVAILABLE,
+                truth_value=True,
+                permitted_statement=stmt,
+                is_controlled_shield=True,
+                category="General",
+                response_source="CONVERSATION_MEMORY",
+                fact_key="clarification"
+            )
+
+        # ---------------------------------------------------------
+        # 5. MANAGEMENT STATEMENT ("You should take rest", "Sit down", "We will monitor you")
         # ---------------------------------------------------------
         if intent.category == IntentCategory.MANAGEMENT_STATEMENT:
+            stmt = "Okay doctor, I'll sit down and rest. Is that going to help ease this pressure in my chest?"
+            return RetrievedFact(
+                fact_id="management_statement_ack",
+                state=FactState.AVAILABLE,
+                truth_value=True,
+                permitted_statement=stmt,
+                is_controlled_shield=True,
+                category="Management",
+                response_source="MANAGEMENT_POLICY",
+                fact_key="management_statement"
+            )
+
+        # ---------------------------------------------------------
+        # 6. MEDICATION STATEMENT ("Take this tablet", "Take paracetamol", "Take sertraline")
+        # ---------------------------------------------------------
+        if intent.category == IntentCategory.MEDICATION_STATEMENT:
             substance = intent.treatment_substance or "medication"
             lower_substance = substance.lower()
 
-            # Check if this is an off-target psychiatric drug for acute cardiac presentation
+            is_emergency_cardiac = any(k in lower_substance for k in ["aspirin", "nitro", "nitroglycerin", "heparin", "morphine", "clopidogrel", "plavix", "statin", "atorvastatin", "metoprolol", "beta blocker"])
             is_ssri_or_off_target = any(k in lower_substance for k in ["sertraline", "sertrakine", "escitalopram", "escita;pram", "paroxetine", "fluoxetine"])
-            is_emergency_cardiac = any(k in lower_substance for k in ["aspirin", "nitro", "nitroglycerin", "heparin", "morphine", "clopidogrel", "plavix", "statin"])
 
             if is_emergency_cardiac:
                 stmt = f"Okay doctor, I'll take the {substance}. Will that help relieve this crushing pressure in my chest?"
             elif is_ssri_or_off_target:
                 stmt = f"I can take whatever you prescribe, doctor, but is that going to stop this severe chest pain and dizziness right now?"
-            else:
+            elif any(k in lower_substance for k in ["paracetamol", "paracetomol", "tylenol", "ibuprofen", "painkiller", "tablet", "pill", "medicine", "medication"]):
                 stmt = "Okay doctor, if you think that's best. Is that going to relieve this heavy chest pain and help me breathe?"
+            else:
+                stmt = f"Okay doctor, if you think {substance} is best. Will that relieve this chest pain?"
 
             return RetrievedFact(
-                fact_id="management_acknowledgment",
+                fact_id="medication_statement_ack",
                 state=FactState.AVAILABLE,
                 truth_value=True,
                 permitted_statement=stmt,
                 is_controlled_shield=True,
                 category="Management",
                 response_source="TREATMENT_POLICY",
-                fact_key="management_statement"
+                fact_key="medication_statement"
             )
 
         # ---------------------------------------------------------
-        # 5. DIAGNOSIS & INVESTIGATION SHIELDS
+        # 7. CLINICIAN DIAGNOSIS STATEMENT ("I think this is a heart attack", "This is anxiety")
+        # ---------------------------------------------------------
+        if intent.category == IntentCategory.DIAGNOSIS_STATEMENT:
+            query_lower = intent.raw_query.lower()
+            if any(k in query_lower for k in ["heart attack", "cardiac", "myocardial", "stemi", "angina", "coronary"]):
+                stmt = "A heart attack, doctor? Oh god, please help me... What do we need to do?"
+            elif any(k in query_lower for k in ["anxiety", "panic", "panic attack"]):
+                stmt = "You think it's just anxiety, doctor? It feels so severe and crushing... could it really just be anxiety?"
+            elif any(k in query_lower for k in ["gerd", "reflux", "acid", "heartburn"]):
+                stmt = "Reflux, doctor? This feels so heavy and suffocating... are you sure it's not something worse?"
+            else:
+                stmt = "Is that what's causing this, doctor? I'm just really worried and in pain... what should we do next?"
+
+            return RetrievedFact(
+                fact_id="diagnosis_statement_ack",
+                state=FactState.AVAILABLE,
+                truth_value=True,
+                permitted_statement=stmt,
+                is_controlled_shield=True,
+                category="General",
+                response_source="DIAGNOSIS_REACTION",
+                fact_key="diagnosis_statement"
+            )
+
+        # ---------------------------------------------------------
+        # 8. DIAGNOSIS & INVESTIGATION SHIELDS (Learner asking patient for diagnosis/test findings)
         # ---------------------------------------------------------
         if intent.category == IntentCategory.DIAGNOSIS_REQUEST:
             return RetrievedFact(
@@ -207,9 +331,9 @@ class FactRetriever:
             )
 
         # ---------------------------------------------------------
-        # 6. EXAMINATION & INVESTIGATION ACTION REQUESTS
+        # 9. EXAMINATION & INVESTIGATION ACTION REQUESTS
         # ---------------------------------------------------------
-        if intent.category == IntentCategory.EXAMINATION_REQUEST:
+        if intent.category in [IntentCategory.EXAMINATION_REQUEST, IntentCategory.EXAM_REQUEST]:
             return RetrievedFact(
                 fact_id="exam_action_ack",
                 state=FactState.AVAILABLE,
@@ -235,7 +359,7 @@ class FactRetriever:
             )
 
         # ---------------------------------------------------------
-        # 7. GREETINGS & EMPATHY & SMALL TALK
+        # 10. GREETINGS & EMPATHY & SMALL TALK
         # ---------------------------------------------------------
         if intent.category == IntentCategory.GREETING:
             return RetrievedFact(
@@ -249,7 +373,7 @@ class FactRetriever:
                 fact_key="greeting"
             )
 
-        if intent.category == IntentCategory.EMPATHY:
+        if intent.category in [IntentCategory.EMPATHY, IntentCategory.EMPATHY_REASSURANCE]:
             return RetrievedFact(
                 fact_id="empathy_acknowledgment",
                 state=FactState.AVAILABLE,
@@ -277,7 +401,7 @@ class FactRetriever:
                 fact_key="small_talk"
             )
 
-        if intent.category == IntentCategory.UNCLEAR:
+        if intent.category in [IntentCategory.UNCLEAR, IntentCategory.UNKNOWN]:
             return RetrievedFact(
                 fact_id="unclear_input",
                 state=FactState.UNKNOWN,
@@ -290,7 +414,7 @@ class FactRetriever:
             )
 
         # ---------------------------------------------------------
-        # 8. OPENING CHIEF COMPLAINT
+        # 11. OPENING CHIEF COMPLAINT
         # ---------------------------------------------------------
         if intent.category == IntentCategory.OPENING_COMPLAINT:
             cc = history.get("chief_complaint")
@@ -306,11 +430,10 @@ class FactRetriever:
             )
 
         # ---------------------------------------------------------
-        # 9. OPQRST: CHARACTER & QUALITY
+        # 12. OPQRST: CHARACTER & QUALITY
         # ---------------------------------------------------------
         if intent.category == IntentCategory.CHARACTER:
             raw_char = _get_val(history.get("character")) or _get_val(facts.get("quality")) or case_data.get("character")
-            # If opening statement has elephant sitting on chest, prefer rich description
             init_stmt = patient.get("opening_statement") or patient.get("initial_statement") or ""
             if not raw_char and "elephant" in init_stmt.lower():
                 raw_char = "It feels like an elephant is sitting right in the middle of my chest, a deep heavy crushing pressure."
@@ -328,7 +451,7 @@ class FactRetriever:
             )
 
         # ---------------------------------------------------------
-        # 10. OPQRST: RADIATION
+        # 13. OPQRST: RADIATION
         # ---------------------------------------------------------
         if intent.category == IntentCategory.RADIATION:
             rad_val = _get_val(history.get("radiation")) or _get_val(facts.get("radiation")) or case_data.get("radiation")
@@ -356,7 +479,7 @@ class FactRetriever:
                 )
 
         # ---------------------------------------------------------
-        # 11. OPQRST: SEVERITY
+        # 14. OPQRST: SEVERITY
         # ---------------------------------------------------------
         if intent.category == IntentCategory.SEVERITY:
             sev_val = _get_val(history.get("severity")) or _get_val(facts.get("severity")) or case_data.get("severity") or "About an 8 out of 10 right now."
@@ -371,7 +494,7 @@ class FactRetriever:
             )
 
         # ---------------------------------------------------------
-        # 12. OPQRST: LOCATION
+        # 15. OPQRST: LOCATION
         # ---------------------------------------------------------
         if intent.category == IntentCategory.LOCATION:
             loc_val = _get_val(history.get("location")) or _get_val(facts.get("location")) or case_data.get("location") or "Right in the middle of my chest."
@@ -386,7 +509,7 @@ class FactRetriever:
             )
 
         # ---------------------------------------------------------
-        # 13. OPQRST: ONSET & TIMING
+        # 16. OPQRST: ONSET & TIMING
         # ---------------------------------------------------------
         if intent.category == IntentCategory.ONSET_TIMING:
             if intent.subconcept == "onset_progression":
@@ -452,7 +575,7 @@ class FactRetriever:
             )
 
         # ---------------------------------------------------------
-        # 14. AGGRAVATING & RELIEVING FACTORS
+        # 17. AGGRAVATING & RELIEVING FACTORS
         # ---------------------------------------------------------
         if intent.category == IntentCategory.AGGRAVATING_FACTORS:
             agg_val = _get_val(history.get("aggravating_factors")) or _get_val(facts.get("aggravatingFactors")) or "Moving around or any minimal exertion makes it noticeably worse."
@@ -479,7 +602,7 @@ class FactRetriever:
             )
 
         # ---------------------------------------------------------
-        # 15. PAST MEDICAL HISTORY
+        # 18. PAST MEDICAL HISTORY
         # ---------------------------------------------------------
         if intent.category == IntentCategory.PAST_MEDICAL_HISTORY:
             if pmh:
@@ -506,7 +629,7 @@ class FactRetriever:
                 )
 
         # ---------------------------------------------------------
-        # 16. MEDICATIONS & ALLERGIES
+        # 19. MEDICATIONS & ALLERGIES
         # ---------------------------------------------------------
         if intent.category == IntentCategory.MEDICATIONS:
             if intent.subconcept == "inhaler_use":
@@ -574,7 +697,7 @@ class FactRetriever:
                 )
 
         # ---------------------------------------------------------
-        # 17. FAMILY & SOCIAL HISTORY
+        # 20. FAMILY & SOCIAL HISTORY
         # ---------------------------------------------------------
         if intent.category == IntentCategory.FAMILY_HISTORY:
             if family_history:
@@ -623,7 +746,7 @@ class FactRetriever:
                 )
 
         # ---------------------------------------------------------
-        # 18. ASSOCIATED SYMPTOMS & REVIEW OF SYSTEMS
+        # 21. ASSOCIATED SYMPTOMS & REVIEW OF SYSTEMS
         # ---------------------------------------------------------
         if intent.category == IntentCategory.ASSOCIATED_SYMPTOM:
             symptom_key = intent.subconcept or "general_inquiry"
@@ -670,7 +793,7 @@ class FactRetriever:
                 fact_key=symptom_key
             )
 
-        # Default fallback to UNKNOWN with clear statement
+        # Default fallback to UNKNOWN
         return RetrievedFact(
             fact_id="general_undocumented",
             state=FactState.UNKNOWN,
