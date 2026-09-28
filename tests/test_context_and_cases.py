@@ -757,3 +757,44 @@ def test_clarification_and_challenge_repair_conversation_flow():
     assert "haven't really noticed anything like that" not in rep10
 
 
+def test_exact_user_reproduction_dialogue_flow():
+    """
+    Test exact reproduction conversation:
+    1. Initial Complaint
+    2. "had you breakfast" -> breakfast memory response
+    3. "in dinner?" -> dinner memory response
+    4. "had you eat any type of medician?" -> medications response (Amlodipine, Atorvastatin)
+    """
+    session_id = f"test-user-flow-{uuid.uuid4()}"
+    case_id = "chest_pain_001"
+
+    # Turn 1: Breakfast
+    r1 = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="had you breakfast",
+        session_id=session_id
+    )
+    rep1 = r1["reply"].lower()
+    assert "breakfast" in rep1
+
+    # Turn 2: In dinner?
+    r2 = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="in dinner?",
+        session_id=session_id
+    )
+    rep2 = r2["reply"].lower()
+    assert "dinner" in rep2
+
+    # Turn 3: had you eat any type of medician?
+    r3 = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="had you eat any type of medician?",
+        session_id=session_id
+    )
+    rep3 = r3["reply"].lower()
+    assert "haven't really noticed" not in rep3
+    assert any(k in rep3 for k in ["amlodipine", "atorvastatin", "medications", "daily medications"])
+
+
+

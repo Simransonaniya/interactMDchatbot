@@ -99,6 +99,13 @@ rep10 = s10.get('reply', '').lower()
 assert any(k in rep10 for k in ["amlodipine", "atorvastatin", "medications"])
 assert "haven't really noticed" not in rep10
 
+# Step 10b: Current Medications History with Typo ("had you eat any type of medician?")
+s10b = send_turn("Step 10b (Medication History with Typo - had you eat any type of medician?)", "had you eat any type of medician?")
+rep10b = s10b.get('reply', '').lower()
+assert any(k in rep10b for k in ["amlodipine", "atorvastatin", "medications"])
+assert "haven't really noticed" not in rep10b
+assert "breakfast" not in rep10b and "dinner" not in rep10b
+
 # Step 11: Management Statement
 s11 = send_turn("Step 11 (Management Statement - You can take a medicine and rest)", "You can take a medicine and rest.")
 rep11 = s11.get('reply', '').lower()

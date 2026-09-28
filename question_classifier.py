@@ -300,6 +300,12 @@ def normalize_message(query: str) -> str:
         r"\btabs?\b": "tablet",
         r"\bpills?\b": "pill",
         r"\bmeds?\b": "medicines",
+        r"\bmedicians?\b": "medicine",
+        r"\bmedecines?\b": "medicine",
+        r"\bmedicnes?\b": "medicine",
+        r"\bmedicens?\b": "medicine",
+        r"\bmedecins?\b": "medicine",
+        r"\bmedications?\b": "medicine",
     }
     for pat, repl in typo_map.items():
         q = re.sub(pat, repl, q)
@@ -448,16 +454,32 @@ class QuestionClassifier:
                 referenced_slot=last_slot
             )
 
+        # Check if this is a clinician instruction/management statement (prescribing, telling patient to take/rest)
+        is_clinician_instruction = (
+            any(re.search(pat, query) for pat in MEDICATION_STATEMENT_PATTERNS)
+            or any(re.search(pat, raw_norm) for pat in MEDICATION_STATEMENT_PATTERNS)
+            or any(re.search(pat, query) for pat in MANAGEMENT_STATEMENT_PATTERNS)
+            or any(re.search(pat, raw_norm) for pat in MANAGEMENT_STATEMENT_PATTERNS)
+        )
+
         # 8b. History Question about Medications (Asking what patient takes / ate medicine)
         med_history_patterns = [
-            r"\b(had\s+(you\s+)?(eat|taken?|had)\s+(any\s+)?medicin[a-z]*|did you (take|eat|have) (any )?medicin[a-z]*)\b",
-            r"\b(what (medications|medicines|pills|drugs) do you (take|use|have))\b",
-            r"\b(are you (taking|on) (any )?(daily )?(medications|medicines|pills|prescriptions))\b",
-            r"\b(any (current |daily )?(medications|medicines|pills|prescriptions))\b",
-            r"^(had you eat any medicine|did you take any medicine|what medicines do you take|what medicines you take)\b"
+            r"\b(had\s+(you\s+)?(eat|taken?|had)\s+(any\s+)?(type\s+of\s+|kind\s+of\s+)?(medicin[a-z]*|pill[a-z]*|drug[a-z]*|tablet[a-z]*|treatment))\b",
+            r"\b(did\s+you\s+(take|eat|have)\s+(any\s+)?(type\s+of\s+|kind\s+of\s+)?(medicin[a-z]*|pill[a-z]*|drug[a-z]*|tablet[a-z]*))\b",
+            r"\b(have\s+you\s+(taken?|eaten|had)\s+(any\s+)?(type\s+of\s+|kind\s+of\s+)?(medicin[a-z]*|pill[a-z]*|drug[a-z]*|tablet[a-z]*))\b",
+            r"\b(what\s+(medications|medicines|pills|drugs|tablets)\s+(do\s+you|are\s+you|did\s+you)\s+(take|use|have|eat))\b",
+            r"\b(are\s+you\s+(taking|on|eating)\s+(any\s+)?(daily\s+|current\s+)?(type\s+of\s+)?(medications|medicines|pills|prescriptions|tablets|drugs))\b",
+            r"\b(any\s+(current\s+|daily\s+)?(type\s+of\s+)?(medications|medicines|pills|prescriptions|tablets|drugs))\b",
+            r"\b(eat|ate|taken?)\s+(any\s+)?(type\s+of\s+|kind\s+of\s+)?(medicin[a-z]*|pill[a-z]*|drug[a-z]*|tablet[a-z]*)\b",
+            r"^(had you eat any medicine|had you eat any type of medician|did you take any medicine|what medicines do you take|what medicines you take)\b"
         ]
-        if any(re.search(pat, query) for pat in med_history_patterns) or (
-            any(k in query for k in ["had you eat any medicine", "what medicines do you take", "what medications do you take", "current medications"])
+        if not is_clinician_instruction and (
+            any(re.search(pat, query) for pat in med_history_patterns) or any(re.search(pat, raw_norm) for pat in med_history_patterns) or (
+                any(k in query or k in raw_norm for k in [
+                    "had you eat any medicine", "had you eat any type of medician", "eat any type of medician", "eat any type of medicine",
+                    "what medicines do you take", "what medications do you take", "current medications", "any type of medicine", "any type of medician"
+                ])
+            )
         ):
             return ClassifiedIntent(
                 raw_query=query_text,
@@ -915,18 +937,23 @@ class QuestionClassifier:
             )
 
         # 26. Social History - Diet / Meals / Breakfast / Lunch / Dinner
+        has_med_terms = any(w in query or w in raw_norm for w in [
+            "medicin", "medication", "pill", "tablet", "capsule", "inhaler", "prescript",
+            "amlodipine", "atorvastatin", "aspirin", "paracetamol", "niciplus", "nicip",
+            "crocin", "dolo", "combiflam", "sertraline", "tylenol", "ibuprofen"
+        ])
         diet_triggers = [
             r"\b(breakfast|lunch|dinner|supper|meal|meals|food|eat|ate|eating|eaten|diet|snack|snacks|brunch)\b",
             r"\b(had\s+(you\s+)?breakfast|did you have breakfast|what did you eat|what was you eat|what have you eaten)\b",
             r"\b(what did you have for|what was you eat in your breakfast|have you eaten|had you breakfast)\b",
             r"^(had you breakfast|did you eat breakfast|what was you eat|what did you eat)\b"
         ]
-        if any(re.search(pat, query) for pat in diet_triggers) or any(k in query for k in [
+        if not has_med_terms and (any(re.search(pat, query) for pat in diet_triggers) or any(k in query for k in [
             "food eaten", "what did you eat", "eat yesterday", "food yesterday",
             "dinner yesterday", "meal yesterday", "diet history", "last meal",
             "what did you have for dinner", "what did you have for lunch", "what did you have for breakfast",
             "food intake yesterday", "diet yesterday", "what did you eat today", "food intake", "breakfast", "had you breakfast"
-        ]):
+        ])):
             diet_slots, time_ref = extract_diet_slots_and_time(query)
             return ClassifiedIntent(
                 raw_query=query_text,
