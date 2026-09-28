@@ -240,12 +240,13 @@ KNOWN_MEDICATION_ENTITIES = [
     "statin", "atorvastatin", "amlodipine", "lisinopril", "inhaler", "tylenol", "ibuprofen",
     "advil", "crocin", "dolo", "combiflam", "nicip", "nicip plus", "niciplus", "nishchit",
     "nishchit plus", "pantocid", "pan 40", "omeprazole", "azithromycin", "antibiotic",
-    "antibiotics", "tablet", "tablets", "pill", "pills", "capsule", "capsules", "medicine", "medication"
+    "antibiotics", "tablet", "tablets", "pill", "pills", "capsule", "capsules", "medicine",
+    "medication", "medications", "meds", "drug", "drugs", "prescription", "prescriptions"
 ]
 
 MEDICATION_FRAGMENT_PATTERNS = [
     r"^(paracetamol|paracetomol|aspirin|sertraline|niciplus|nicip|nicip plus|nishchit plus|crocin|dolo|combiflam|atorvastatin|amlodipine|lisinopril|metoprolol|inhaler|tylenol|ibuprofen)(\s+(tablet|tablets|pill|pills|capsule|mg|\d+mg|dose))?$",
-    r"^(tablet|tablets|pill|pills|capsule|medicine|medication)$",
+    r"^(tablet|tablets|pill|pills|capsule|medicine|medication|meds)$",
     r"^(paracetamol|paracetomol|aspirin|niciplus|nicip plus|crocin|dolo)\s+tablet$",
 ]
 
@@ -299,17 +300,25 @@ def normalize_message(query: str) -> str:
         r"\bescita;pram\b": "escitalopram",
         r"\btabs?\b": "tablet",
         r"\bpills?\b": "pill",
-        r"\bmeds?\b": "medicines",
-        r"\bmedicians?\b": "medicine",
-        r"\bmedecines?\b": "medicine",
-        r"\bmedicnes?\b": "medicine",
-        r"\bmedicens?\b": "medicine",
-        r"\bmedecins?\b": "medicine",
-        r"\bmedications?\b": "medicine",
+        r"\bmeds?\b": "medicine",
+        r"\bmedc[a-z]*\b": "medicine",      # medcian, medcines, medcine, medcins
+        r"\bmedic[a-z]*\b": "medicine",     # medician, medican, medicin, medicne, medicen, medicene, medicines, medication, medications, medicationn
+        r"\bmedec[a-z]*\b": "medicine",     # medecine, medecin, medecines
+        r"\bmedicat[a-z]*\b": "medicine",   # medication, medications, medicationn, medicatns
     }
     for pat, repl in typo_map.items():
         q = re.sub(pat, repl, q)
     return re.sub(r"\s+", " ", q).strip()
+
+def detect_medication_entity(query: str, raw_norm: str) -> Optional[str]:
+    q_low = query.lower()
+    norm_low = raw_norm.lower()
+    for ent in KNOWN_MEDICATION_ENTITIES:
+        if re.search(r"\b" + re.escape(ent) + r"\b", q_low) or re.search(r"\b" + re.escape(ent) + r"\b", norm_low):
+            return ent
+    if re.search(r"\b(medc[a-z]*|medic[a-z]*|medec[a-z]*|meds?)\b", q_low):
+        return "medicine"
+    return None
 
 def extract_diet_slots_and_time(query: str) -> Tuple[List[str], str]:
     q = query.lower()
@@ -462,30 +471,43 @@ class QuestionClassifier:
             or any(re.search(pat, raw_norm) for pat in MANAGEMENT_STATEMENT_PATTERNS)
         )
 
+        med_entity = detect_medication_entity(query, raw_norm)
+
         # 8b. History Question about Medications (Asking what patient takes / ate medicine)
         med_history_patterns = [
             r"\b(had\s+(you\s+)?(eat|taken?|had)\s+(any\s+)?(type\s+of\s+|kind\s+of\s+)?(medicin[a-z]*|pill[a-z]*|drug[a-z]*|tablet[a-z]*|treatment))\b",
             r"\b(did\s+you\s+(take|eat|have)\s+(any\s+)?(type\s+of\s+|kind\s+of\s+)?(medicin[a-z]*|pill[a-z]*|drug[a-z]*|tablet[a-z]*))\b",
             r"\b(have\s+you\s+(taken?|eaten|had)\s+(any\s+)?(type\s+of\s+|kind\s+of\s+)?(medicin[a-z]*|pill[a-z]*|drug[a-z]*|tablet[a-z]*))\b",
             r"\b(what\s+(medications|medicines|pills|drugs|tablets)\s+(do\s+you|are\s+you|did\s+you)\s+(take|use|have|eat))\b",
+            r"\b(which\s+(medications|medicines|pills|drugs|tablets)\s+(do\s+you|are\s+you|did\s+you)\s+(take|use|have|eat))\b",
             r"\b(are\s+you\s+(taking|on|eating)\s+(any\s+)?(daily\s+|current\s+)?(type\s+of\s+)?(medications|medicines|pills|prescriptions|tablets|drugs))\b",
             r"\b(any\s+(current\s+|daily\s+)?(type\s+of\s+)?(medications|medicines|pills|prescriptions|tablets|drugs))\b",
             r"\b(eat|ate|taken?)\s+(any\s+)?(type\s+of\s+|kind\s+of\s+)?(medicin[a-z]*|pill[a-z]*|drug[a-z]*|tablet[a-z]*)\b",
-            r"^(had you eat any medicine|had you eat any type of medician|did you take any medicine|what medicines do you take|what medicines you take)\b"
+            r"\b(did\s+you\s+eat\s+medc[a-z]*)\b",
+            r"^(had you eat any medicine|had you eat any type of medician|did you take any medicine|did you eat medcian|did you eat medicine|did you eat any meds|what medicines do you take|what medicines you take)\b"
         ]
-        if not is_clinician_instruction and (
-            any(re.search(pat, query) for pat in med_history_patterns) or any(re.search(pat, raw_norm) for pat in med_history_patterns) or (
-                any(k in query or k in raw_norm for k in [
-                    "had you eat any medicine", "had you eat any type of medician", "eat any type of medician", "eat any type of medicine",
-                    "what medicines do you take", "what medications do you take", "current medications", "any type of medicine", "any type of medician"
+        is_med_inquiry = not is_clinician_instruction and (
+            any(re.search(pat, query) for pat in med_history_patterns)
+            or any(re.search(pat, raw_norm) for pat in med_history_patterns)
+            or (
+                med_entity is not None and any(k in query or k in raw_norm for k in [
+                    "eat", "ate", "take", "taken", "taking", "took", "had", "have", "on", "use", "using",
+                    "what", "which", "any", "prescript", "daily", "current", "regular", "routine",
+                    "did you", "have you", "had you", "are you", "do you", "can you tell"
                 ])
             )
-        ):
+            or any(k in query or k in raw_norm for k in [
+                "had you eat any medicine", "had you eat any type of medician", "eat any type of medician", "eat any type of medicine",
+                "did you eat medcian", "did you eat medicine", "did you eat any medicine", "did you eat any meds",
+                "what medicines do you take", "what medications do you take", "current medications", "any type of medicine", "any type of medician"
+            ])
+        )
+        if is_med_inquiry:
             return ClassifiedIntent(
                 raw_query=query_text,
                 category=IntentCategory.MEDICATIONS,
                 subconcept="medications",
-                slots=["medications"],
+                slots=["current_medications"],
                 ui_category="Meds",
                 normalized_query=raw_norm
             )
