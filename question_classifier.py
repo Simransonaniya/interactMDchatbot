@@ -16,7 +16,7 @@ Performs semantic intent classification covering:
 
 import re
 from enum import Enum
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 
 
 class IntentCategory(str, Enum):
@@ -27,6 +27,7 @@ class IntentCategory(str, Enum):
     EMPATHY_REASSURANCE = "EMPATHY_REASSURANCE"
     MANAGEMENT_STATEMENT = "MANAGEMENT_STATEMENT"
     MEDICATION_STATEMENT = "MEDICATION_STATEMENT"
+    MEDICATION_NAME_FRAGMENT = "MEDICATION_NAME_FRAGMENT"
     DIAGNOSIS_STATEMENT = "DIAGNOSIS_STATEMENT"
     EXAM_REQUEST = "EXAM_REQUEST"
     INVESTIGATION_REQUEST = "INVESTIGATION_REQUEST"
@@ -67,20 +68,26 @@ class ClassifiedIntent:
         raw_query: str,
         category: IntentCategory,
         subconcept: Optional[str] = None,
+        slots: Optional[List[str]] = None,
+        time_reference: Optional[str] = None,
         ui_category: str = "General",
         empathy_detected: bool = False,
         jargon_detected: Optional[str] = None,
         action_target: Optional[str] = None,
-        treatment_substance: Optional[str] = None
+        treatment_substance: Optional[str] = None,
+        normalized_query: Optional[str] = None
     ):
         self.raw_query = raw_query
         self.category = category
         self.subconcept = subconcept
+        self.slots = slots or []
+        self.time_reference = time_reference or "unspecified"
         self.ui_category = ui_category
         self.empathy_detected = empathy_detected
         self.jargon_detected = jargon_detected
         self.action_target = action_target
         self.treatment_substance = treatment_substance
+        self.normalized_query = normalized_query or raw_query
 
     @property
     def primary_type(self) -> str:
@@ -105,7 +112,7 @@ class ClassifiedIntent:
         return self.category.value
 
     def __repr__(self):
-        return f"<ClassifiedIntent category={self.category.value} subconcept={self.subconcept} empathy={self.empathy_detected}>"
+        return f"<ClassifiedIntent category={self.category.value} subconcept={self.subconcept} slots={self.slots} time={self.time_reference} empathy={self.empathy_detected}>"
 
 
 PROMPT_INJECTION_PATTERNS = [
@@ -169,23 +176,40 @@ INVESTIGATION_ORDER_PATTERNS = [
     r"(i'd like to|i want to|let's|can we|i will|order|we should) (order|run|get|perform|obtain|check) (a |an )?(stat )?(12-lead )?(ecg|ekg|chest x-ray|cxr|blood test|labs|troponin|ct scan|ultrasound)",
 ]
 
+# Known Medication Keywords & Entities
+KNOWN_MEDICATION_ENTITIES = [
+    "paracetamol", "paracetomol", "aspirin", "sertraline", "sertrakine", "escitalopram",
+    "escita;pram", "nitro", "nitroglycerin", "heparin", "morphine", "metoprolol",
+    "statin", "atorvastatin", "amlodipine", "lisinopril", "inhaler", "tylenol", "ibuprofen",
+    "advil", "crocin", "dolo", "combiflam", "nicip", "nicip plus", "niciplus", "nishchit",
+    "nishchit plus", "pantocid", "pan 40", "omeprazole", "azithromycin", "antibiotic",
+    "antibiotics", "tablet", "tablets", "pill", "pills", "capsule", "capsules", "medicine", "medication"
+]
+
+MEDICATION_FRAGMENT_PATTERNS = [
+    r"^(paracetamol|paracetomol|aspirin|sertraline|niciplus|nicip|nicip plus|nishchit plus|crocin|dolo|combiflam|atorvastatin|amlodipine|lisinopril|metoprolol|inhaler|tylenol|ibuprofen)(\s+(tablet|tablets|pill|pills|capsule|mg|\d+mg|dose))?$",
+    r"^(tablet|tablets|pill|pills|capsule|medicine|medication)$",
+    r"^(paracetamol|paracetomol|aspirin|niciplus|nicip plus|crocin|dolo)\s+tablet$",
+]
+
 # Medication Statement Triggers (Clinician prescribing / giving medication to patient)
 MEDICATION_STATEMENT_PATTERNS = [
-    r"\b(take|have|give|giving you|prescribe|prescribing|start you on|start on|administer|try)\b.*\b(paracetamol|paracetomol|tablet|pill|medicine|medication|capsule|aspirin|nitro|nitroglycerin|sertraline|sertrakine|escitalopram|escita;pram|statin|atorvastatin|metoprolol|beta blocker|morphine|heparin|clopidogrel|plavix|inhaler|antibiotic|antibiotics|tylenol|ibuprofen|advil)\b",
-    r"\b(you (can|cab|may|should|need to|must|have to)|i (will|am going to|can|want to|recommend you)|let's|let us|we (will|should|can|are going to))\s+(take|give you|prescribe|administer|try|start you on)\s+(this |some |the |a )?(medicin[a-z]*|pill|drug|tablet|treatment|dose|prescription|remedy|paracetamol|paracetomol|aspirin)\b",
-    r"\b(you (can|cab)|take this)\b.*\b(medicin|medication|tablet|pill|capsule|drug|sertrakine|sertraline|escitalopram|escita;pram|inhaler|paracetamol|paracetomol)\b",
+    r"\b(take|have|give|giving you|prescribe|prescribing|start you on|start on|administer|try)\b.*\b(paracetamol|paracetomol|tablet|pill|medicine|medication|capsule|aspirin|nitro|nitroglycerin|sertraline|sertrakine|escitalopram|escita;pram|statin|atorvastatin|metoprolol|beta blocker|morphine|heparin|clopidogrel|plavix|inhaler|antibiotic|antibiotics|tylenol|ibuprofen|advil|niciplus|nicip|nicip plus|nishchit plus)\b",
+    r"\b(you (can|cab|may|should|need to|must|have to)|i (will|am going to|can|want to|recommend you)|let's|let us|we (will|should|can|are going to))\s+(take|give you|prescribe|administer|try|start you on)\s+(this |some |the |a )?(medicin[a-z]*|pill|drug|tablet|treatment|dose|prescription|remedy|paracetamol|paracetomol|aspirin|niciplus|nicip|nishchit)\b",
+    r"\b(you (can|cab)|take this)\b.*\b(medicin|medication|tablet|pill|capsule|drug|sertrakine|sertraline|escitalopram|escita;pram|inhaler|paracetamol|paracetomol|niciplus|nicip plus|nishchit plus)\b",
     r"\b(prescribe|prescribing|order)\s+(medication|medicine|pill|drug|tablet|treatment)\b",
     r"\b(i am giving you|i will give you|i'm giving you|let me give you)\s+(some |a |the )?(medicin|medication|pill|tablet|drug|shot|injection|dose)\b",
-    r"^(take|try|have)\s+(a |the |this )?(paracetamol|paracetomol|aspirin|tablet|pill|medicine|medication|tylenol|ibuprofen)\b",
-    r"^you should take (tablet|medicine|a tablet|a pill|paracetamol|paracetomol|aspirin|sertraline)",
+    r"^(take|try|have)\s+(a |the |this )?(paracetamol|paracetomol|aspirin|tablet|pill|medicine|medication|tylenol|ibuprofen|niciplus|nicip plus|nishchit plus)\b",
+    r"^you should take (tablet|medicine|a tablet|a pill|paracetamol|paracetomol|aspirin|sertraline|niciplus|nicip plus)",
 ]
 
 # Non-pharmacological Management Instructions (Rest, position, monitoring)
 MANAGEMENT_STATEMENT_PATTERNS = [
-    r"\b(you (should|can|need to|must|have to)|let's|let us|try to|i want you to|we will|we'll|let's have you|i'd like you to)\s+(take rest|rest|sit down|lie down|relax|stay in bed|stay still|take it easy|stay calm|monitor you|keep you under observation)\b",
+    r"\b(you (should|can|need to|must|have to)|let's|let us|try to|i want you to|we will|we'll|let's have you|i'd like you to)\s+(take (some |a )?rest|rest|sit down|lie down|relax|stay in bed|stay still|take it easy|stay calm|monitor you|keep you under observation)\b",
     r"\b(sit down and rest|have you sit down|have you lie down|sit down|lie down|take a seat|have a seat|rest for a bit|rest now)\b",
-    r"^(you should take rest|take rest|take a rest|have a rest|sit down|lie down|rest now|we will monitor you|we'll monitor you|let's monitor you)\b",
+    r"^(you should take (some |a )?rest|take (some |a )?rest|have (some |a )?rest|sit down|lie down|rest now|rest a bit|we will monitor you|we'll monitor you|let's monitor you)\b",
     r"\b(we('ll| will| are going to) monitor you)\b",
+    r"\b(take (some |a )?rest)\b",
 ]
 
 EMPATHY_KEYWORDS = [
@@ -206,11 +230,54 @@ GENUINELY_UNCLEAR_PATTERNS = [
     r"^[a-z]{1,3}$",
 ]
 
+def normalize_message(query: str) -> str:
+    q = query.lower().strip()
+    q = re.sub(r"[^\w\s\?\-\/]", " ", q)
+    typo_map = {
+        r"\bparacetomol\b": "paracetamol",
+        r"\bniciplus\b": "nicip plus",
+        r"\bnishchit\s+plus\b": "nicip plus",
+        r"\bnishchit\b": "nicip plus",
+        r"\bsertrakine\b": "sertraline",
+        r"\bescita;pram\b": "escitalopram",
+        r"\btabs?\b": "tablet",
+        r"\bpills?\b": "pill",
+        r"\bmeds?\b": "medicines",
+    }
+    for pat, repl in typo_map.items():
+        q = re.sub(pat, repl, q)
+    return re.sub(r"\s+", " ", q).strip()
+
+def extract_diet_slots_and_time(query: str) -> Tuple[List[str], str]:
+    q = query.lower()
+    slots = []
+    if "breakfast" in q:
+        slots.append("breakfast")
+    if "lunch" in q:
+        slots.append("lunch")
+    if "dinner" in q or "supper" in q:
+        slots.append("dinner")
+    if "snack" in q or "snacks" in q:
+        slots.append("snacks")
+    if not slots and any(k in q for k in ["eat", "ate", "food", "meal", "diet"]):
+        slots.append("general_meal")
+
+    time_ref = "unspecified"
+    if any(k in q for k in ["yesterday", "last night", "past day", "previous day", "last evening"]):
+        time_ref = "previous_day"
+    elif any(k in q for k in ["today", "this morning", "this afternoon", "earlier today", "morning"]):
+        time_ref = "today"
+    elif any(k in q for k in ["tomorrow"]):
+        time_ref = "future"
+
+    return slots, time_ref
+
 
 class QuestionClassifier:
 
     @staticmethod
     def classify(query_text: str) -> ClassifiedIntent:
+        raw_norm = normalize_message(query_text)
         query = query_text.lower().strip()
         tokens = query.split()
 
@@ -219,7 +286,8 @@ class QuestionClassifier:
             return ClassifiedIntent(
                 raw_query=query_text,
                 category=IntentCategory.PROMPT_INJECTION,
-                ui_category="Security"
+                ui_category="Security",
+                normalized_query=raw_norm
             )
 
         # 2. Hidden Diagnosis Request (Doctor asking patient what condition patient has)
@@ -228,7 +296,8 @@ class QuestionClassifier:
                 raw_query=query_text,
                 category=IntentCategory.DIAGNOSIS_REQUEST,
                 subconcept="diagnosis_shield",
-                ui_category="General"
+                ui_category="General",
+                normalized_query=raw_norm
             )
 
         # 3. Diagnosis Statement (Doctor explaining/giving provisional diagnosis to patient)
@@ -237,7 +306,8 @@ class QuestionClassifier:
                 raw_query=query_text,
                 category=IntentCategory.DIAGNOSIS_STATEMENT,
                 subconcept="clinician_diagnosis_statement",
-                ui_category="General"
+                ui_category="General",
+                normalized_query=raw_norm
             )
 
         # 4. Hidden Investigation Result Shield
@@ -246,7 +316,8 @@ class QuestionClassifier:
                 raw_query=query_text,
                 category=IntentCategory.INVESTIGATION_REQUEST,
                 subconcept="investigation_result_shield",
-                ui_category="Diagnostics"
+                ui_category="Diagnostics",
+                normalized_query=raw_norm
             )
 
         # 5. Examination Request
@@ -256,7 +327,8 @@ class QuestionClassifier:
                 raw_query=query_text,
                 category=IntentCategory.EXAMINATION_REQUEST,
                 action_target=target,
-                ui_category="Exam"
+                ui_category="Exam",
+                normalized_query=raw_norm
             )
 
         # 6. Investigation Order Request
@@ -266,7 +338,8 @@ class QuestionClassifier:
                 raw_query=query_text,
                 category=IntentCategory.INVESTIGATION_REQUEST,
                 action_target=target,
-                ui_category="Diagnostics"
+                ui_category="Diagnostics",
+                normalized_query=raw_norm
             )
 
         # 7. Clarification Request ("Are you sure?", "Really?", "Can you explain that again?")
@@ -275,7 +348,8 @@ class QuestionClassifier:
                 raw_query=query_text,
                 category=IntentCategory.CLARIFICATION,
                 subconcept="clarification",
-                ui_category="General"
+                ui_category="General",
+                normalized_query=raw_norm
             )
 
         # 8. Confirmation Request ("Is that correct?", "So it's been 45 minutes?")
@@ -284,19 +358,36 @@ class QuestionClassifier:
                 raw_query=query_text,
                 category=IntentCategory.CONFIRMATION,
                 subconcept="confirmation",
-                ui_category="General"
+                ui_category="General",
+                normalized_query=raw_norm
+            )
+
+        # 8b. History Question about Medications (Asking what patient takes / ate medicine)
+        med_history_patterns = [
+            r"\b(had\s+(you\s+)?(eat|taken?|had)\s+(any\s+)?medicin[a-z]*|did you (take|eat|have) (any )?medicin[a-z]*)\b",
+            r"\b(what (medications|medicines|pills|drugs) do you (take|use|have))\b",
+            r"\b(are you (taking|on) (any )?(daily )?(medications|medicines|pills|prescriptions))\b",
+            r"\b(any (current |daily )?(medications|medicines|pills|prescriptions))\b",
+            r"^(had you eat any medicine|did you take any medicine|what medicines do you take|what medicines you take)\b"
+        ]
+        if any(re.search(pat, query) for pat in med_history_patterns) or (
+            any(k in query for k in ["had you eat any medicine", "what medicines do you take", "what medications do you take", "current medications"])
+        ):
+            return ClassifiedIntent(
+                raw_query=query_text,
+                category=IntentCategory.MEDICATIONS,
+                subconcept="medications",
+                slots=["medications"],
+                ui_category="Meds",
+                normalized_query=raw_norm
             )
 
         # 9. Medication Statement from Doctor (Checked before symptom inquiries)
         is_empathy_take = any(k in query for k in ["take care", "take good care", "take your time", "take a deep breath", "take a breath", "take a slow breath", "take a seat"])
         if not is_empathy_take and any(re.search(pat, query) for pat in MEDICATION_STATEMENT_PATTERNS):
             substance = "medication"
-            for drug in [
-                "paracetamol", "paracetomol", "aspirin", "sertraline", "sertrakine", "escitalopram",
-                "escita;pram", "nitro", "nitroglycerin", "heparin", "morphine", "metoprolol",
-                "statin", "atorvastatin", "inhaler", "tylenol", "ibuprofen", "tablet", "pill"
-            ]:
-                if drug in query:
+            for drug in KNOWN_MEDICATION_ENTITIES:
+                if drug in query or drug in raw_norm:
                     substance = drug
                     break
             return ClassifiedIntent(
@@ -304,7 +395,28 @@ class QuestionClassifier:
                 category=IntentCategory.MEDICATION_STATEMENT,
                 subconcept="medication_instruction",
                 ui_category="Management",
-                treatment_substance=substance
+                treatment_substance=substance,
+                normalized_query=raw_norm
+            )
+
+        # 9b. Medication Name Fragment / Standalone Medication Input
+        clean_clean = re.sub(r"[^\w\s]", "", query).strip()
+        is_med_fragment = any(re.search(pat, clean_clean) for pat in MEDICATION_FRAGMENT_PATTERNS) or (
+            len(tokens) <= 3 and any(drug == clean_clean or f"{drug} tablet" == clean_clean or f"take {drug}" == clean_clean for drug in KNOWN_MEDICATION_ENTITIES)
+        )
+        if is_med_fragment:
+            substance = "medication"
+            for drug in KNOWN_MEDICATION_ENTITIES:
+                if drug in query or drug in raw_norm:
+                    substance = drug
+                    break
+            return ClassifiedIntent(
+                raw_query=query_text,
+                category=IntentCategory.MEDICATION_NAME_FRAGMENT,
+                subconcept="medication_fragment",
+                ui_category="Management",
+                treatment_substance=substance,
+                normalized_query=raw_norm
             )
 
         # 10. Non-pharmacological Management Statement (Rest, position, monitoring)
@@ -313,7 +425,8 @@ class QuestionClassifier:
                 raw_query=query_text,
                 category=IntentCategory.MANAGEMENT_STATEMENT,
                 subconcept="rest_or_monitoring",
-                ui_category="Management"
+                ui_category="Management",
+                normalized_query=raw_norm
             )
 
         # 11. Empathy Detection & Bedside Reassurance Statement
@@ -715,9 +828,9 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        # 26. Social History - Diet / Meals / Breakfast
+        # 26. Social History - Diet / Meals / Breakfast / Lunch / Dinner
         diet_triggers = [
-            r"\b(breakfast|lunch|dinner|meal|meals|food|eat|ate|eating|eaten|diet|snack|brunch)\b",
+            r"\b(breakfast|lunch|dinner|supper|meal|meals|food|eat|ate|eating|eaten|diet|snack|snacks|brunch)\b",
             r"\b(had\s+(you\s+)?breakfast|did you have breakfast|what did you eat|what was you eat|what have you eaten)\b",
             r"\b(what did you have for|what was you eat in your breakfast|have you eaten|had you breakfast)\b",
             r"^(had you breakfast|did you eat breakfast|what was you eat|what did you eat)\b"
@@ -728,12 +841,16 @@ class QuestionClassifier:
             "what did you have for dinner", "what did you have for lunch", "what did you have for breakfast",
             "food intake yesterday", "diet yesterday", "what did you eat today", "food intake", "breakfast", "had you breakfast"
         ]):
+            diet_slots, time_ref = extract_diet_slots_and_time(query)
             return ClassifiedIntent(
                 raw_query=query_text,
                 category=IntentCategory.SOCIAL_HISTORY,
                 subconcept="diet_history",
+                slots=diet_slots,
+                time_reference=time_ref,
                 ui_category="SocialHx",
-                empathy_detected=empathy_detected
+                empathy_detected=empathy_detected,
+                normalized_query=raw_norm
             )
 
         if any(k in query for k in ["smoke", "tobacco", "cigarette", "smoking", "vape", "vaping", "alcohol", "drink", "wine", "beer", "work", "job", "occupation", "stress", "drugs", "cocaine", "substance"]):

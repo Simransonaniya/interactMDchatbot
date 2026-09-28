@@ -522,3 +522,120 @@ def test_12_full_production_conversation_sequence():
         session_id=session_id
     )
     assert "8" in t10["reply"] or "eight" in t10["reply"].lower()
+
+
+def test_13_advanced_intent_routing_and_temporal_diet():
+    """
+    Test 13: Regression Tests A, B, C, J for Temporal / Meal slot routing:
+    - Test A: 'Had you breakfast?' -> breakfast slot
+    - Test B: 'What did you eat yesterday for lunch and dinner?' -> slots = [lunch, dinner], time = previous_day
+    - Test C: Turn 1 (Breakfast) then Turn 2 (Lunch/Dinner) must NOT reuse breakfast response on Turn 2!
+    - Test J: Unknown diet query for dinner -> dinner specific response, not breakfast
+    """
+    session_id = f"test-temporal-diet-{uuid.uuid4()}"
+    case_id = "chest_pain_001"
+
+    # Turn 1: Breakfast
+    r1 = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="had you breakfast",
+        session_id=session_id
+    )
+    rep1 = r1["reply"].lower()
+    assert "haven't really noticed anything like that" not in rep1
+    assert "breakfast" in rep1
+
+    # Turn 2: Lunch & Dinner yesterday (must NOT return breakfast!)
+    r2 = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="what did you eat tomorrow yesterday in your lunch and dinner",
+        session_id=session_id
+    )
+    rep2 = r2["reply"].lower()
+    assert "haven't really noticed anything like that" not in rep2
+    assert "breakfast" not in rep2
+    assert any(k in rep2 for k in ["lunch", "dinner"])
+    assert "yesterday" in rep2
+
+    # Turn 3: Dinner yesterday only
+    r3 = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="What did you eat yesterday for dinner?",
+        session_id=session_id
+    )
+    rep3 = r3["reply"].lower()
+    assert "breakfast" not in rep3
+    assert "dinner" in rep3
+
+
+def test_14_medication_fragments_and_history():
+    """
+    Test 14: Regression Tests D, E, F, G, H, I:
+    - Test D: 'What medicines do you currently take?' or 'had you eat any medicine' -> Amlodipine / Atorvastatin
+    - Test E: 'you can take a nishchit plus medicine for your rest' -> MEDICATION_STATEMENT
+    - Test F: 'niciplus' -> MEDICATION_NAME_FRAGMENT
+    - Test G: 'paracetomol tablet' -> MEDICATION_NAME_FRAGMENT / MEDICATION_STATEMENT
+    - Test H: 'Take some rest.' -> MANAGEMENT_STATEMENT
+    - Test I: 'Do you have PCOD?' for male patient -> NOT_APPLICABLE
+    """
+    session_id = f"test-med-frag-{uuid.uuid4()}"
+    case_id = "chest_pain_001"
+
+    # Test D: Current medications history
+    r_med_hx = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="had you eat any medicine",
+        session_id=session_id
+    )
+    rep_med_hx = r_med_hx["reply"].lower()
+    assert any(k in rep_med_hx for k in ["amlodipine", "atorvastatin", "medications"])
+
+    # Test E: Clinician Medication Statement with brand typo
+    r_med_stmt = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="you can take a nishchit plus medicine for your rest",
+        session_id=session_id
+    )
+    rep_med_stmt = r_med_stmt["reply"].lower()
+    assert "haven't really noticed" not in rep_med_stmt
+    assert any(k in rep_med_stmt for k in ["okay", "doctor", "relieve", "chest pain", "breathe", "help"])
+
+    # Test F: Medication Name Fragment (niciplus)
+    r_frag1 = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="niciplus",
+        session_id=session_id
+    )
+    rep_frag1 = r_frag1["reply"].lower()
+    assert "haven't really noticed anything like that" not in rep_frag1
+    assert any(k in rep_frag1 for k in ["medication", "medicine", "take", "doctor", "relieve", "chest pain", "breathe"])
+
+    # Test G: Medication Name + Form with typo (paracetomol tablet)
+    r_frag2 = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="paracetomol tablet",
+        session_id=session_id
+    )
+    rep_frag2 = r_frag2["reply"].lower()
+    assert "haven't really noticed anything like that" not in rep_frag2
+    assert any(k in rep_frag2 for k in ["okay", "doctor", "relieve", "chest pain", "breathe", "tablet", "medicine"])
+
+    # Test H: Management statement
+    r_mgmt = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="Take some rest.",
+        session_id=session_id
+    )
+    rep_mgmt = r_mgmt["reply"].lower()
+    assert "haven't really noticed" not in rep_mgmt
+    assert any(k in rep_mgmt for k in ["rest", "sit down", "okay", "chest", "pressure"])
+
+    # Test I: PCOD (male)
+    r_pcod = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="Do you have PCOD?",
+        session_id=session_id
+    )
+    rep_pcod = r_pcod["reply"].lower()
+    assert "male" in rep_pcod or "doesn't apply" in rep_pcod
+

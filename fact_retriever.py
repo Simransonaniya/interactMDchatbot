@@ -248,23 +248,31 @@ class FactRetriever:
             )
 
         # ---------------------------------------------------------
-        # 6. MEDICATION STATEMENT ("Take this tablet", "Take paracetamol", "Take sertraline")
+        # 6. MEDICATION STATEMENT & MEDICATION NAME FRAGMENTS ("niciplus", "paracetomol tablet", "take tablet")
         # ---------------------------------------------------------
-        if intent.category == IntentCategory.MEDICATION_STATEMENT:
+        if intent.category in [IntentCategory.MEDICATION_STATEMENT, IntentCategory.MEDICATION_NAME_FRAGMENT]:
             substance = intent.treatment_substance or "medication"
             lower_substance = substance.lower()
 
             is_emergency_cardiac = any(k in lower_substance for k in ["aspirin", "nitro", "nitroglycerin", "heparin", "morphine", "clopidogrel", "plavix", "statin", "atorvastatin", "metoprolol", "beta blocker"])
             is_ssri_or_off_target = any(k in lower_substance for k in ["sertraline", "sertrakine", "escitalopram", "escita;pram", "paroxetine", "fluoxetine"])
 
-            if is_emergency_cardiac:
-                stmt = f"Okay doctor, I'll take the {substance}. Will that help relieve this crushing pressure in my chest?"
-            elif is_ssri_or_off_target:
-                stmt = f"I can take whatever you prescribe, doctor, but is that going to stop this severe chest pain and dizziness right now?"
-            elif any(k in lower_substance for k in ["paracetamol", "paracetomol", "tylenol", "ibuprofen", "painkiller", "tablet", "pill", "medicine", "medication"]):
-                stmt = "Okay doctor, if you think that's best. Is that going to relieve this heavy chest pain and help me breathe?"
+            if intent.category == IntentCategory.MEDICATION_NAME_FRAGMENT:
+                if is_emergency_cardiac:
+                    stmt = f"Okay doctor, should I take {substance} right now? Will that help ease this crushing pressure in my chest?"
+                elif any(k in lower_substance for k in ["paracetamol", "paracetomol", "niciplus", "nicip plus", "nicip", "nishchit", "nishchit plus", "crocin", "dolo", "combiflam", "tylenol", "ibuprofen", "tablet", "medicine", "pill"]):
+                    stmt = "Okay doctor, if you think that's best. Is that going to relieve this heavy chest pain and help me breathe?"
+                else:
+                    stmt = f"Is that a medication you'd like me to take, doctor? Will it help ease this heavy chest pain and help me breathe?"
             else:
-                stmt = f"Okay doctor, if you think {substance} is best. Will that relieve this chest pain?"
+                if is_emergency_cardiac:
+                    stmt = f"Okay doctor, I'll take the {substance}. Will that help relieve this crushing pressure in my chest?"
+                elif is_ssri_or_off_target:
+                    stmt = f"I can take whatever you prescribe, doctor, but is that going to stop this severe chest pain and dizziness right now?"
+                elif any(k in lower_substance for k in ["paracetamol", "paracetomol", "niciplus", "nicip plus", "nicip", "nishchit", "nishchit plus", "crocin", "dolo", "combiflam", "tylenol", "ibuprofen", "painkiller", "tablet", "pill", "medicine", "medication"]):
+                    stmt = "Okay doctor, if you think that's best. Is that going to relieve this heavy chest pain and help me breathe?"
+                else:
+                    stmt = f"Okay doctor, if you think {substance} is best. Will that relieve this chest pain?"
 
             return RetrievedFact(
                 fact_id="medication_statement_ack",
@@ -720,23 +728,47 @@ class FactRetriever:
 
         if intent.category == IntentCategory.SOCIAL_HISTORY:
             if intent.subconcept == "diet_history":
+                slots = intent.slots or []
+                time_ref = intent.time_reference or "unspecified"
                 diet_val = _get_val(history.get("diet")) or _get_val(facts.get("diet")) or _get_val(case_data.get("diet"))
                 if diet_val:
                     return RetrievedFact(
                         fact_id="diet_history",
                         state=FactState.AVAILABLE,
                         truth_value=diet_val,
-                        permitted_statement=f"For breakfast, {diet_val.lower().rstrip('.')}.",
+                        permitted_statement=f"For meals, {diet_val.lower().rstrip('.')}.",
                         category="SocialHx",
                         response_source="CASE_FACT",
                         fact_key="diet"
                     )
                 else:
+                    has_lunch = "lunch" in slots
+                    has_dinner = "dinner" in slots
+                    has_breakfast = "breakfast" in slots
+
+                    if has_lunch and has_dinner:
+                        time_str = "yesterday" if time_ref == "previous_day" else ("today" if time_ref == "today" else "yesterday")
+                        stmt = f"I don't really remember what I ate for lunch or dinner {time_str}, doctor... My mind is just so focused on this chest pain."
+                    elif has_lunch:
+                        time_str = "yesterday" if time_ref == "previous_day" else ("today" if time_ref == "today" else "yesterday")
+                        stmt = f"I don't really remember what I had for lunch {time_str}, doctor... My mind is just so focused on this chest pain."
+                    elif has_dinner:
+                        time_str = "yesterday" if time_ref == "previous_day" else ("today" if time_ref == "today" else "yesterday")
+                        stmt = f"I don't really remember what I had for dinner {time_str}, doctor... My mind is just so focused on this chest pain."
+                    elif has_breakfast:
+                        if time_ref == "previous_day":
+                            stmt = "I don't really remember what I had for breakfast yesterday, doctor... My mind is just completely overwhelmed by this pain."
+                        else:
+                            stmt = "I don't really remember what I ate for breakfast this morning, doctor... I was just rushing to get into the office."
+                    else:
+                        time_str = "yesterday" if time_ref == "previous_day" else ("this morning" if time_ref == "today" else "")
+                        stmt = f"I don't really remember what I ate {time_str}, doctor... I was just in a rush and now this chest pain is all I can focus on.".replace("  ", " ")
+
                     return RetrievedFact(
                         fact_id="diet_history",
                         state=FactState.UNKNOWN,
                         truth_value=None,
-                        permitted_statement="I don't really remember what I ate for breakfast this morning, doctor... I was just rushing to get into the office.",
+                        permitted_statement=stmt,
                         is_controlled_shield=True,
                         category="SocialHx",
                         response_source="UNKNOWN",

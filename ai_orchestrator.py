@@ -146,6 +146,7 @@ class AIOrchestrator:
             IntentCategory.CONFIRMATION,
             IntentCategory.MANAGEMENT_STATEMENT,
             IntentCategory.MEDICATION_STATEMENT,
+            IntentCategory.MEDICATION_NAME_FRAGMENT,
             IntentCategory.DIAGNOSIS_STATEMENT,
             IntentCategory.DIAGNOSIS_REQUEST,
             IntentCategory.EMPATHY,
