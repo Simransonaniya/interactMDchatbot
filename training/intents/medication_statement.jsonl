@@ -1,0 +1,9 @@
+{"text": "take paracetamol", "intent": "MEDICATION_STATEMENT", "slot": "treatment_order", "entities": [{"text": "paracetamol", "type": "MEDICATION"}]}
+{"text": "take this tablet", "intent": "MEDICATION_STATEMENT", "slot": "treatment_order", "entities": [{"text": "tablet", "type": "MEDICATION"}]}
+{"text": "you should take this medicine", "intent": "MEDICATION_STATEMENT", "slot": "treatment_order", "entities": [{"text": "medicine", "type": "MEDICATION"}]}
+{"text": "take niciplus", "intent": "MEDICATION_STATEMENT", "slot": "treatment_order", "entities": [{"text": "niciplus", "type": "MEDICATION"}]}
+{"text": "you can take a tablet", "intent": "MEDICATION_STATEMENT", "slot": "treatment_order", "entities": [{"text": "tablet", "type": "MEDICATION"}]}
+{"text": "take aspirin right now", "intent": "MEDICATION_STATEMENT", "slot": "treatment_order", "entities": [{"text": "aspirin", "type": "MEDICATION"}]}
+{"text": "you should take tablet", "intent": "MEDICATION_STATEMENT", "slot": "treatment_order", "entities": [{"text": "tablet", "type": "MEDICATION"}]}
+{"text": "i am giving you nitroglycerin", "intent": "MEDICATION_STATEMENT", "slot": "treatment_order", "entities": [{"text": "nitroglycerin", "type": "MEDICATION"}]}
+{"text": "take some rest and take this pill", "intent": "MEDICATION_STATEMENT", "slot": "treatment_order", "entities": [{"text": "pill", "type": "MEDICATION"}]}

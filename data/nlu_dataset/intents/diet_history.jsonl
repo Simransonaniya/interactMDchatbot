@@ -1,0 +1,9 @@
+{"text": "did you eat breakfast", "intent": "DIET_HISTORY", "slot": "breakfast", "entities": [{"text": "breakfast", "type": "FOOD_MEAL"}]}
+{"text": "what did you eat for breakfast", "intent": "DIET_HISTORY", "slot": "breakfast", "entities": [{"text": "breakfast", "type": "FOOD_MEAL"}]}
+{"text": "had you breakfast", "intent": "DIET_HISTORY", "slot": "breakfast", "entities": [{"text": "breakfast", "type": "FOOD_MEAL"}]}
+{"text": "what did you eat for lunch", "intent": "DIET_HISTORY", "slot": "lunch", "entities": [{"text": "lunch", "type": "FOOD_MEAL"}]}
+{"text": "what did you eat for dinner", "intent": "DIET_HISTORY", "slot": "dinner", "entities": [{"text": "dinner", "type": "FOOD_MEAL"}]}
+{"text": "what did you have yesterday for dinner", "intent": "DIET_HISTORY", "slot": "dinner", "entities": [{"text": "dinner", "type": "FOOD_MEAL"}]}
+{"text": "did you have anything to eat", "intent": "DIET_HISTORY", "slot": "general_meal", "entities": [{"text": "eat", "type": "FOOD_MEAL"}]}
+{"text": "what did you eat today", "intent": "DIET_HISTORY", "slot": "general_meal", "entities": [{"text": "eat", "type": "FOOD_MEAL"}]}
+{"text": "tell me about your diet", "intent": "DIET_HISTORY", "slot": "diet_history", "entities": [{"text": "diet", "type": "FOOD_MEAL"}]}

@@ -1,0 +1,10 @@
+{"text": "paracetamol", "intent": "MEDICATION_NAME_FRAGMENT", "slot": "medication_fragment", "entities": [{"text": "paracetamol", "type": "MEDICATION"}]}
+{"text": "paracetomol", "intent": "MEDICATION_NAME_FRAGMENT", "slot": "medication_fragment", "entities": [{"text": "paracetomol", "type": "MEDICATION"}]}
+{"text": "niciplus", "intent": "MEDICATION_NAME_FRAGMENT", "slot": "medication_fragment", "entities": [{"text": "niciplus", "type": "MEDICATION"}]}
+{"text": "nicip plus", "intent": "MEDICATION_NAME_FRAGMENT", "slot": "medication_fragment", "entities": [{"text": "nicip plus", "type": "MEDICATION"}]}
+{"text": "amlodipine", "intent": "MEDICATION_NAME_FRAGMENT", "slot": "medication_fragment", "entities": [{"text": "amlodipine", "type": "MEDICATION"}]}
+{"text": "atorvastatin", "intent": "MEDICATION_NAME_FRAGMENT", "slot": "medication_fragment", "entities": [{"text": "atorvastatin", "type": "MEDICATION"}]}
+{"text": "tablet", "intent": "MEDICATION_NAME_FRAGMENT", "slot": "medication_fragment", "entities": [{"text": "tablet", "type": "MEDICATION"}]}
+{"text": "medicine", "intent": "MEDICATION_NAME_FRAGMENT", "slot": "medication_fragment", "entities": [{"text": "medicine", "type": "MEDICATION"}]}
+{"text": "meds", "intent": "MEDICATION_NAME_FRAGMENT", "slot": "medication_fragment", "entities": [{"text": "meds", "type": "MEDICATION"}]}
+{"text": "paracetomol tablet", "intent": "MEDICATION_NAME_FRAGMENT", "slot": "medication_fragment", "entities": [{"text": "paracetomol", "type": "MEDICATION"}, {"text": "tablet", "type": "MEDICATION"}]}

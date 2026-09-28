@@ -1,0 +1,14 @@
+{"text": "what medicine do you take", "intent": "MEDICATION_HISTORY", "slot": "current_medications", "entities": [{"text": "medicine", "type": "MEDICATION"}]}
+{"text": "what medication are you on", "intent": "MEDICATION_HISTORY", "slot": "current_medications", "entities": [{"text": "medication", "type": "MEDICATION"}]}
+{"text": "what meds do you take", "intent": "MEDICATION_HISTORY", "slot": "current_medications", "entities": [{"text": "meds", "type": "MEDICATION"}]}
+{"text": "did you take medicine", "intent": "MEDICATION_HISTORY", "slot": "current_medications", "entities": [{"text": "medicine", "type": "MEDICATION"}]}
+{"text": "did you eat medicine", "intent": "MEDICATION_HISTORY", "slot": "current_medications", "entities": [{"text": "medicine", "type": "MEDICATION"}]}
+{"text": "did you eat medcian", "intent": "MEDICATION_HISTORY", "slot": "current_medications", "entities": [{"text": "medcian", "type": "MEDICATION"}]}
+{"text": "what tablets do you take", "intent": "MEDICATION_HISTORY", "slot": "current_medications", "entities": [{"text": "tablets", "type": "MEDICATION"}]}
+{"text": "what pills are you taking", "intent": "MEDICATION_HISTORY", "slot": "current_medications", "entities": [{"text": "pills", "type": "MEDICATION"}]}
+{"text": "did you take any meds", "intent": "MEDICATION_HISTORY", "slot": "current_medications", "entities": [{"text": "meds", "type": "MEDICATION"}]}
+{"text": "can you tell me what medication you take", "intent": "MEDICATION_HISTORY", "slot": "current_medications", "entities": [{"text": "medication", "type": "MEDICATION"}]}
+{"text": "what type of medicine did you take", "intent": "MEDICATION_HISTORY", "slot": "current_medications", "entities": [{"text": "medicine", "type": "MEDICATION"}]}
+{"text": "are you taking any daily medication", "intent": "MEDICATION_HISTORY", "slot": "current_medications", "entities": [{"text": "medication", "type": "MEDICATION"}]}
+{"text": "what prescriptions are you on", "intent": "MEDICATION_HISTORY", "slot": "current_medications", "entities": [{"text": "prescriptions", "type": "MEDICATION"}]}
+{"text": "did you use your inhaler today", "intent": "MEDICATION_HISTORY", "slot": "inhaler_use", "entities": [{"text": "inhaler", "type": "MEDICATION"}]}

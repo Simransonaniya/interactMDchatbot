@@ -697,8 +697,8 @@ class FactRetriever:
         # ---------------------------------------------------------
         # 19. MEDICATIONS & ALLERGIES
         # ---------------------------------------------------------
-        if intent.category == IntentCategory.MEDICATIONS:
-            if intent.subconcept == "inhaler_use":
+        if intent.category in [IntentCategory.MEDICATIONS, IntentCategory.MEDICATION_HISTORY]:
+            if intent.subconcept == "inhaler_use" or (intent.slots and "inhaler_use" in intent.slots):
                 return RetrievedFact(
                     fact_id="inhaler_use",
                     state=FactState.AVAILABLE_NEGATIVE,
@@ -711,7 +711,12 @@ class FactRetriever:
 
             if meds:
                 meds_list = meds if isinstance(meds, list) else [str(meds)]
-                stmt = f"I take my daily medications: {', '.join(meds_list)}."
+                # Clean parenthetical adherence notes for general medication listing
+                clean_meds = []
+                for m in meds_list:
+                    clean_m = re.sub(r"\s*\([^)]*\)", "", m).strip()
+                    clean_meds.append(clean_m if clean_m else m)
+                stmt = f"I take my daily medications: {', '.join(clean_meds)}."
                 return RetrievedFact(
                     fact_id="medications",
                     state=FactState.AVAILABLE,
@@ -730,6 +735,45 @@ class FactRetriever:
                     category="Meds",
                     response_source="CASE_FACT",
                     fact_key="medications"
+                )
+
+        if intent.category == IntentCategory.MEDICATION_ADHERENCE or intent.subconcept == "medication_adherence":
+            if meds:
+                meds_list = meds if isinstance(meds, list) else [str(meds)]
+                has_missed_doses = any("miss" in m.lower() or "skip" in m.lower() or "forget" in m.lower() for m in meds_list)
+                if has_missed_doses:
+                    clean_meds = [re.sub(r"\s*\([^)]*\)", "", m).strip() for m in meds_list]
+                    stmt = f"I'm prescribed {', '.join(clean_meds)}, but to be honest I frequently miss doses or forget to take them when I'm busy with work."
+                    return RetrievedFact(
+                        fact_id="medication_adherence",
+                        state=FactState.AVAILABLE,
+                        truth_value=meds_list,
+                        permitted_statement=stmt,
+                        category="Meds",
+                        response_source="CASE_FACT",
+                        fact_key="medication_adherence"
+                    )
+                else:
+                    clean_meds = [re.sub(r"\s*\([^)]*\)", "", m).strip() for m in meds_list]
+                    stmt = f"Yes doctor, I've been taking my {', '.join(clean_meds)} regularly every day as prescribed."
+                    return RetrievedFact(
+                        fact_id="medication_adherence",
+                        state=FactState.AVAILABLE,
+                        truth_value=meds_list,
+                        permitted_statement=stmt,
+                        category="Meds",
+                        response_source="CASE_FACT",
+                        fact_key="medication_adherence"
+                    )
+            else:
+                return RetrievedFact(
+                    fact_id="medication_adherence",
+                    state=FactState.AVAILABLE_NEGATIVE,
+                    truth_value=False,
+                    permitted_statement="I don't take any regular prescription medications, doctor.",
+                    category="Meds",
+                    response_source="CASE_FACT",
+                    fact_key="medication_adherence"
                 )
 
         if intent.category == IntentCategory.ALLERGIES:

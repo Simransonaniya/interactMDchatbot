@@ -1,0 +1,12 @@
+{"query": "did you eat medcian", "expected_intent": "MEDICATION_HISTORY", "expected_slot": "current_medications", "pair_type": "hard_negative_pair_1"}
+{"query": "did you eat breakfast", "expected_intent": "DIET_HISTORY", "expected_slot": "breakfast", "pair_type": "hard_negative_pair_1"}
+{"query": "what did you eat for dinner", "expected_intent": "DIET_HISTORY", "expected_slot": "dinner", "pair_type": "hard_negative_pair_2"}
+{"query": "what medicine did you take", "expected_intent": "MEDICATION_HISTORY", "expected_slot": "current_medications", "pair_type": "hard_negative_pair_2"}
+{"query": "did you eat lunch", "expected_intent": "DIET_HISTORY", "expected_slot": "lunch", "pair_type": "hard_negative_pair_3"}
+{"query": "did you eat medicine", "expected_intent": "MEDICATION_HISTORY", "expected_slot": "current_medications", "pair_type": "hard_negative_pair_3"}
+{"query": "take paracetamol", "expected_intent": "MEDICATION_STATEMENT", "expected_slot": "treatment_order", "pair_type": "statement_vs_history"}
+{"query": "did you take paracetamol", "expected_intent": "MEDICATION_HISTORY", "expected_slot": "current_medications", "pair_type": "statement_vs_history"}
+{"query": "niciplus", "expected_intent": "MEDICATION_NAME_FRAGMENT", "expected_slot": "medication_fragment", "pair_type": "fragment"}
+{"query": "paracetomol tablet", "expected_intent": "MEDICATION_NAME_FRAGMENT", "expected_slot": "medication_fragment", "pair_type": "fragment"}
+{"query": "did you take your medicine today", "expected_intent": "MEDICATION_ADHERENCE", "expected_slot": "medication_adherence", "pair_type": "adherence"}
+{"query": "have you missed any doses", "expected_intent": "MEDICATION_ADHERENCE", "expected_slot": "medication_adherence", "pair_type": "adherence"}

@@ -171,6 +171,23 @@ class PatientResponseValidator:
                         reason="Contradiction: affirmed a negative symptom"
                     )
 
+            # D. Intent / Topic Cross-Contamination Consistency (Medication vs Diet)
+            last_topic = getattr(session_state, "last_topic", "") or ""
+            if last_topic in ["medications", "medication", "medication_adherence", "inhaler_use"]:
+                if any(k in lower_text for k in ["what i ate", "what i had for lunch", "what i had for dinner", "what i had for breakfast", "remember what i ate", "remember what i had"]):
+                    return ValidationResult(
+                        is_valid=False,
+                        sanitized_text=fallback_statement,
+                        reason="Intent cross-contamination: diet statement produced for medication intent"
+                    )
+            elif last_topic in ["diet", "diet_history", "breakfast", "lunch", "dinner"]:
+                if any(k in lower_text for k in ["take my daily medications", "amlodipine", "atorvastatin", "prescription medications"]):
+                    return ValidationResult(
+                        is_valid=False,
+                        sanitized_text=fallback_statement,
+                        reason="Intent cross-contamination: medication statement produced for diet intent"
+                    )
+
         # 8. Truncate overly verbose responses to 2-3 sentences max
         sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
         if len(sentences) > 3:

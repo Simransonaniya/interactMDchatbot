@@ -1,0 +1,327 @@
+{
+  "medicine": {
+    "canonical": "medicine",
+    "class": "generic_term",
+    "aliases": [
+      "medicine",
+      "medicines",
+      "medication",
+      "medications",
+      "meds",
+      "med",
+      "tablet",
+      "tablets",
+      "pill",
+      "pills",
+      "capsule",
+      "capsules",
+      "drug",
+      "drugs",
+      "prescription",
+      "prescriptions",
+      "prescribed medication",
+      "daily medication",
+      "daily medicines",
+      "routine meds"
+    ],
+    "common_misspellings": [
+      "medcian",
+      "medcians",
+      "medicin",
+      "medicins",
+      "medecine",
+      "medecines",
+      "medcine",
+      "medcines",
+      "medican",
+      "medicans",
+      "medicatn",
+      "medicatns",
+      "medicne",
+      "medicnes",
+      "medicationn",
+      "medicationns",
+      "tab",
+      "tabs"
+    ]
+  },
+  "paracetamol": {
+    "canonical": "paracetamol",
+    "class": "analgesic_antipyretic",
+    "aliases": [
+      "paracetamol",
+      "paracetomol",
+      "paracetmol",
+      "paracetamol tablet",
+      "paracetamol tablets",
+      "acetaminophen",
+      "tylenol",
+      "panadol",
+      "crocin",
+      "dolo",
+      "dolo 650",
+      "dolo650",
+      "calpol",
+      "combiflam"
+    ],
+    "common_misspellings": [
+      "paracetomol",
+      "paracetmol",
+      "paracitamol",
+      "paracetemol"
+    ]
+  },
+  "nicip plus": {
+    "canonical": "nicip plus",
+    "class": "nsaid_combination",
+    "aliases": [
+      "nicip plus",
+      "nicip",
+      "niciplus",
+      "nicip-plus",
+      "nishchit",
+      "nishchit plus",
+      "nimesulide",
+      "nimesulide paracetamol"
+    ],
+    "common_misspellings": [
+      "niciplus",
+      "nicip-plus",
+      "nishchit plus",
+      "nishchit"
+    ]
+  },
+  "amlodipine": {
+    "canonical": "amlodipine",
+    "class": "calcium_channel_blocker",
+    "aliases": [
+      "amlodipine",
+      "amlodipin",
+      "norvasc",
+      "amlodipine 5mg",
+      "amlodipine 5 mg",
+      "amlodipine besylate",
+      "amlong"
+    ],
+    "common_misspellings": [
+      "amlodipin",
+      "amlodepine",
+      "amlodopine",
+      "amladipine"
+    ]
+  },
+  "atorvastatin": {
+    "canonical": "atorvastatin",
+    "class": "statin",
+    "aliases": [
+      "atorvastatin",
+      "atorva",
+      "lipitor",
+      "atorvastatin 20mg",
+      "atorvastatin 20 mg",
+      "atorlip",
+      "atorvastatin calcium",
+      "statin",
+      "statins"
+    ],
+    "common_misspellings": [
+      "atorvastin",
+      "atorvastatine",
+      "atrovastatin"
+    ]
+  },
+  "aspirin": {
+    "canonical": "aspirin",
+    "class": "antiplatelet",
+    "aliases": [
+      "aspirin",
+      "asprin",
+      "ecosprin",
+      "disprin",
+      "bayer aspirin",
+      "acetylsalicylic acid",
+      "asa"
+    ],
+    "common_misspellings": [
+      "asprin",
+      "aspirine",
+      "asprin tablet"
+    ]
+  },
+  "nitroglycerin": {
+    "canonical": "nitroglycerin",
+    "class": "nitrate",
+    "aliases": [
+      "nitroglycerin",
+      "nitro",
+      "nitrospray",
+      "sublingual nitroglycerin",
+      "sorbitrate",
+      "gtn",
+      "nitrostat",
+      "isosorbide"
+    ],
+    "common_misspellings": [
+      "nitroglycerine",
+      "nitro glycerin",
+      "nitroglyserin"
+    ]
+  },
+  "sertraline": {
+    "canonical": "sertraline",
+    "class": "ssri",
+    "aliases": [
+      "sertraline",
+      "sertrakine",
+      "zoloft",
+      "sertra",
+      "sertraline 50mg"
+    ],
+    "common_misspellings": [
+      "sertrakine",
+      "setraline",
+      "sertralin"
+    ]
+  },
+  "escitalopram": {
+    "canonical": "escitalopram",
+    "class": "ssri",
+    "aliases": [
+      "escitalopram",
+      "escita;pram",
+      "lexapro",
+      "cipralex",
+      "nexito"
+    ],
+    "common_misspellings": [
+      "escita;pram",
+      "escitalopramm",
+      "escitalpram"
+    ]
+  },
+  "inhaler": {
+    "canonical": "inhaler",
+    "class": "bronchodilator",
+    "aliases": [
+      "inhaler",
+      "blue inhaler",
+      "salbutamol",
+      "albuterol",
+      "ventolin",
+      "puffer",
+      "asthma pump",
+      "asthma inhaler"
+    ],
+    "common_misspellings": [
+      "inhailer",
+      "inhealer"
+    ]
+  },
+  "metoprolol": {
+    "canonical": "metoprolol",
+    "class": "beta_blocker",
+    "aliases": [
+      "metoprolol",
+      "lopressor",
+      "toprol",
+      "beta blocker",
+      "betaloc"
+    ],
+    "common_misspellings": [
+      "metoprol",
+      "metaprolol"
+    ]
+  },
+  "lisinopril": {
+    "canonical": "lisinopril",
+    "class": "ace_inhibitor",
+    "aliases": [
+      "lisinopril",
+      "zestril",
+      "prinivil",
+      "ace inhibitor"
+    ],
+    "common_misspellings": [
+      "lisinoprol",
+      "lizinopril"
+    ]
+  },
+  "ibuprofen": {
+    "canonical": "ibuprofen",
+    "class": "nsaid",
+    "aliases": [
+      "ibuprofen",
+      "advil",
+      "motrin",
+      "brufen"
+    ],
+    "common_misspellings": [
+      "ibuprofin",
+      "ibrufen"
+    ]
+  },
+  "heparin": {
+    "canonical": "heparin",
+    "class": "anticoagulant",
+    "aliases": [
+      "heparin",
+      "enoxaparin",
+      "lovenox",
+      "blood thinner"
+    ],
+    "common_misspellings": [
+      "heparine",
+      "heparinn"
+    ]
+  },
+  "morphine": {
+    "canonical": "morphine",
+    "class": "opioid",
+    "aliases": [
+      "morphine",
+      "morphine sulfate"
+    ],
+    "common_misspellings": [
+      "morphene",
+      "morphin"
+    ]
+  },
+  "clopidogrel": {
+    "canonical": "clopidogrel",
+    "class": "antiplatelet",
+    "aliases": [
+      "clopidogrel",
+      "plavix"
+    ],
+    "common_misspellings": [
+      "clopidogrel",
+      "clopidogel"
+    ]
+  },
+  "pantoprazole": {
+    "canonical": "pantoprazole",
+    "class": "ppi",
+    "aliases": [
+      "pantoprazole",
+      "pantocid",
+      "pan 40",
+      "pan d",
+      "protonix"
+    ],
+    "common_misspellings": [
+      "pantoprazol"
+    ]
+  },
+  "omeprazole": {
+    "canonical": "omeprazole",
+    "class": "ppi",
+    "aliases": [
+      "omeprazole",
+      "prilosec",
+      "omez"
+    ],
+    "common_misspellings": [
+      "omeprazol"
+    ]
+  }
+}

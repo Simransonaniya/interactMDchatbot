@@ -1,0 +1,9 @@
+{"text": "did you take your medicine today", "intent": "MEDICATION_ADHERENCE", "slot": "medication_adherence", "entities": [{"text": "medicine", "type": "MEDICATION"}]}
+{"text": "have you been taking your medications regularly", "intent": "MEDICATION_ADHERENCE", "slot": "medication_adherence", "entities": [{"text": "medications", "type": "MEDICATION"}]}
+{"text": "are you compliant with your medication", "intent": "MEDICATION_ADHERENCE", "slot": "medication_adherence", "entities": [{"text": "medication", "type": "MEDICATION"}]}
+{"text": "have you missed any doses", "intent": "MEDICATION_ADHERENCE", "slot": "medication_adherence", "entities": [{"text": "doses", "type": "MEDICATION"}]}
+{"text": "did you take your morning medicine", "intent": "MEDICATION_ADHERENCE", "slot": "medication_adherence", "entities": [{"text": "medicine", "type": "MEDICATION"}]}
+{"text": "did you take your morning tablet", "intent": "MEDICATION_ADHERENCE", "slot": "medication_adherence", "entities": [{"text": "tablet", "type": "MEDICATION"}]}
+{"text": "are you taking your medications as prescribed", "intent": "MEDICATION_ADHERENCE", "slot": "medication_adherence", "entities": [{"text": "medications", "type": "MEDICATION"}]}
+{"text": "did you forget to take your medicine today", "intent": "MEDICATION_ADHERENCE", "slot": "medication_adherence", "entities": [{"text": "medicine", "type": "MEDICATION"}]}
+{"text": "have you skipped any pills recently", "intent": "MEDICATION_ADHERENCE", "slot": "medication_adherence", "entities": [{"text": "pills", "type": "MEDICATION"}]}

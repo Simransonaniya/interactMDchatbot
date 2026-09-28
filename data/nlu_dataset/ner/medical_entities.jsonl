@@ -1,0 +1,8 @@
+{"text": "Amlodipine 5 mg daily", "entities": [{"text": "Amlodipine", "type": "MEDICATION"}, {"text": "5 mg", "type": "DOSAGE"}, {"text": "daily", "type": "FREQUENCY"}]}
+{"text": "Atorvastatin 20 mg daily", "entities": [{"text": "Atorvastatin", "type": "MEDICATION"}, {"text": "20 mg", "type": "DOSAGE"}, {"text": "daily", "type": "FREQUENCY"}]}
+{"text": "Paracetamol 650 mg", "entities": [{"text": "Paracetamol", "type": "MEDICATION"}, {"text": "650 mg", "type": "DOSAGE"}]}
+{"text": "take one tablet of aspirin", "entities": [{"text": "one tablet", "type": "DOSAGE"}, {"text": "aspirin", "type": "MEDICATION"}]}
+{"text": "severe crushing chest pressure for 45 minutes", "entities": [{"text": "crushing pressure", "type": "SYMPTOM"}, {"text": "chest", "type": "BODY_PART"}, {"text": "45 minutes", "type": "DURATION"}]}
+{"text": "shortness of breath and cold sweat", "entities": [{"text": "shortness of breath", "type": "SYMPTOM"}, {"text": "cold sweat", "type": "SYMPTOM"}]}
+{"text": "did you eat breakfast this morning", "entities": [{"text": "breakfast", "type": "FOOD_MEAL"}, {"text": "this morning", "type": "DURATION"}]}
+{"text": "did you eat medcian", "entities": [{"text": "medcian", "type": "MEDICATION", "normalized": "medicine"}]}
