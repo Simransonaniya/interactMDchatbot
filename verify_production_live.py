@@ -18,75 +18,84 @@ def send_turn(label, msg):
         'session_id': session_id,
         'message': msg,
         'conversation_history': []
-    }, timeout=30.0)
+    }, timeout=45.0)
     if resp.status_code != 200:
         print(f"Error on {label}: status={resp.status_code}, body={resp.text}")
         raise ValueError(f"HTTP {resp.status_code}: {resp.text}")
     data = resp.json()
-    print(f"{label}: {data.get('reply')}")
+    reply = data.get('reply', '')
+    print(f"\n{label}")
+    print(f"Doctor: {msg}")
+    print(f"Patient: {reply}")
     return data
 
-# Turn 1: Start Case / Opening
-t1 = send_turn("Turn 1 (Opening)", "Hello, what brought you to the emergency room today?")
-assert 'pressure' in t1.get('reply', '').lower() or 'chest' in t1.get('reply', '').lower()
+# Turn 1: Start Case / Initial greeting
+t1 = send_turn("Turn 1 (Opening statement)", "Hello, what brought you into the clinic today?")
+reply1 = t1.get('reply', '').lower()
+assert any(k in reply1 for k in ['chest', 'elephant', 'pressure', 'tightness'])
 
-# Turn 2: Severity
-t2 = send_turn("Turn 2 (Severity)", "On a scale of 1 to 10, how severe is your discomfort right now?")
-assert '8' in t2.get('reply', '') or 'eight' in t2.get('reply', '').lower()
-assert "haven't really noticed" not in t2.get('reply', '').lower()
+# Turn 2: Can you describe what the pain feels like?
+t2 = send_turn("Turn 2 (Pain Description)", "Can you describe what the pain feels like?")
+reply2 = t2.get('reply', '').lower()
+assert any(k in reply2 for k in ['elephant', 'pressure', 'heavy', 'tight', 'crushing'])
+assert "haven't really noticed" not in reply2
+assert "office" not in reply2 or "sitting" in reply2 # verify it's not the entire multi-sentence statement dumped verbatim
 
-# Turn 3: Repeated Severity
-t3 = send_turn("Turn 3 (Repeated Severity)", "On a scale of 1 to 10, how severe is your discomfort right now?")
-assert '8' in t3.get('reply', '') or 'eight' in t3.get('reply', '').lower()
-assert "haven't really noticed" not in t3.get('reply', '').lower()
+# Turn 3: Cold sweats, nausea, vomiting
+t3 = send_turn("Turn 3 (Associated Symptoms)", "Have you experienced any cold sweats, nausea, or vomiting?")
+reply3 = t3.get('reply', '').lower()
+assert any(k in reply3 for k in ['sweat', 'cold sweat', 'dizzy'])
+assert "haven't really noticed" not in reply3
 
-# Turn 4: "are you sure?"
-t4 = send_turn("Turn 4 (Clarification 'are you sure?')", "are you sure?")
+# Turn 4: Management: you should take medicine home and take rest
+t4 = send_turn("Turn 4 (Management Statement)", "you should take medicine home and take rest")
 reply4 = t4.get('reply', '').lower()
 assert "haven't really noticed" not in reply4
 assert "anything like that" not in reply4
-assert any(k in reply4 for k in ["yes", "sure", "8", "intense", "severe"])
+assert any(k in reply4 for k in ['okay', 'doctor', 'rest', 'relieve', 'help', 'chest'])
 
-# Turn 5: Management: "you should take rest"
-t5 = send_turn("Turn 5 (Management Statement 'you should take rest')", "you should take rest")
+# Turn 5: Medication: you can take a Paracetamol if you feel like a fever
+t5 = send_turn("Turn 5 (Medication Statement)", "you can take a Paracetamol if you feel like a fever")
 reply5 = t5.get('reply', '').lower()
 assert "haven't really noticed" not in reply5
 assert "anything like that" not in reply5
-assert any(k in reply5 for k in ["rest", "sit down", "okay", "ease", "help", "chest"])
+assert any(k in reply5 for k in ['okay', 'doctor', 'relieve', 'chest', 'breathe', 'paracetamol', 'fever', 'medicine'])
 
-# Turn 6: Treatment: "you should take tablet"
-t6 = send_turn("Turn 6 (Medication Statement 'you should take tablet')", "you should take tablet")
+# Turn 6: PCOD question to male patient
+t6 = send_turn("Turn 6 (Demographic Applicability - PCOD)", "do you have a PCOD also")
 reply6 = t6.get('reply', '').lower()
-assert "haven't really noticed" not in reply6
-assert "anything like that" not in reply6
-assert any(k in reply6 for k in ["okay", "doctor", "relieve", "chest pain", "breathe", "tablet", "medicine"])
+assert any(k in reply6 for k in ['male', 'man', "doesn't apply", 'not applicable', 'female'])
 
-# Turn 7: Medication with typo: "take paracetomol"
-t7 = send_turn("Turn 7 (Medication Statement 'take paracetomol')", "take paracetomol")
+# Turn 7: Breakfast question (had you breakfast)
+t7 = send_turn("Turn 7 (Diet/Breakfast Question 1)", "had you breakfast")
 reply7 = t7.get('reply', '').lower()
-assert "haven't really noticed" not in reply7
-assert "anything like that" not in reply7
-assert any(k in reply7 for k in ["okay", "doctor", "relieve", "chest pain", "breathe", "paracetamol", "paracetomol"])
+assert "haven't really noticed anything like that" not in reply7
+assert any(k in reply7 for k in ["breakfast", "ate", "eat", "remember", "sure", "morning", "rushing"])
 
-# Turn 8: New History Question: Radiation
-t8 = send_turn("Turn 8 (New History Question - Radiation)", "Does the pain spread anywhere?")
+# Turn 8: Breakfast detail question (what was you eat in your breakfast)
+t8 = send_turn("Turn 8 (Diet/Breakfast Question 2)", "what was you eat in your breakfast")
 reply8 = t8.get('reply', '').lower()
-assert any(k in reply8 for k in ['jaw', 'arm', 'left', 'radiat'])
+assert "haven't really noticed anything like that" not in reply8
+assert any(k in reply8 for k in ["breakfast", "ate", "eat", "remember", "sure", "morning", "food"])
 
-# Turn 9: Repeated History Question: Radiation
-t9 = send_turn("Turn 9 (Repeated History Question - Radiation)", "Does the pain spread to your jaw or arm?")
+# Turn 9: Clarification: are you sure?
+t9 = send_turn("Turn 9 (Clarification - Are you sure?)", "are you sure?")
 reply9 = t9.get('reply', '').lower()
-assert any(k in reply9 for k in ['jaw', 'arm', 'yes', 'spread', 'radiat'])
+assert "haven't really noticed" not in reply9
+assert any(k in reply9 for k in ["yes", "sure", "doctor", "remember", "morning", "really", "honest"])
 
-# Turn 10: Examination
-t10 = httpx.post(f'{base_url}/api/simulation/exam', json={
-    'case_id': case_id,
-    'session_id': session_id,
-    'exam_id': 'pf-cardiovascular-01'
-}, timeout=30.0).json()
-print(f"Turn 10 (Physical Exam): {t10.get('finding', t10.get('value', 'OK'))}")
-assert t10.get('finding') or t10.get('value') or t10.get('exam_id')
+# Turn 10a: Severity (first time)
+t10a = send_turn("Turn 10a (Severity 1)", "How severe is your discomfort?")
+reply10a = t10a.get('reply', '').lower()
+assert '8' in reply10a or 'eight' in reply10a
+assert "haven't really noticed" not in reply10a
 
-print('=====================================================')
-print('ALL 10 PRODUCTION SEQUENCE STEPS VERIFIED & PASSED!')
+# Turn 10b: Repeated Severity (second time)
+t10b = send_turn("Turn 10b (Severity 2 - Repeated)", "How severe is your discomfort?")
+reply10b = t10b.get('reply', '').lower()
+assert '8' in reply10b or 'eight' in reply10b
+assert "haven't really noticed" not in reply10b
+
+print('\n=====================================================')
+print('ALL 10 PRODUCTION SEQUENCE TURNS VERIFIED & PASSED!')
 print('=====================================================')

@@ -715,11 +715,18 @@ class QuestionClassifier:
                 empathy_detected=empathy_detected
             )
 
-        if any(k in query for k in [
+        # 26. Social History - Diet / Meals / Breakfast
+        diet_triggers = [
+            r"\b(breakfast|lunch|dinner|meal|meals|food|eat|ate|eating|eaten|diet|snack|brunch)\b",
+            r"\b(had\s+(you\s+)?breakfast|did you have breakfast|what did you eat|what was you eat|what have you eaten)\b",
+            r"\b(what did you have for|what was you eat in your breakfast|have you eaten|had you breakfast)\b",
+            r"^(had you breakfast|did you eat breakfast|what was you eat|what did you eat)\b"
+        ]
+        if any(re.search(pat, query) for pat in diet_triggers) or any(k in query for k in [
             "food eaten", "what did you eat", "eat yesterday", "food yesterday",
             "dinner yesterday", "meal yesterday", "diet history", "last meal",
             "what did you have for dinner", "what did you have for lunch", "what did you have for breakfast",
-            "food intake yesterday", "diet yesterday", "what did you eat today", "food intake"
+            "food intake yesterday", "diet yesterday", "what did you eat today", "food intake", "breakfast", "had you breakfast"
         ]):
             return ClassifiedIntent(
                 raw_query=query_text,

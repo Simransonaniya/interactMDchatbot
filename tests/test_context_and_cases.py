@@ -8,9 +8,11 @@ Test 4 — Repeated question consistency
 Test 5 — Medication / treatment statement handling
 Test 6 — Unknown information handling
 Test 7 — Multi-turn conversation continuity (5+ turns)
-Test 8 — Exact Current Production Reproduction Transcript
+Test 8 — Exact Production Reproduction Transcript
 Test 9 — Intent Classification Unit Tests across all categories
 Test 10 — Diagnosis Statements & Clinical Examination Requests
+Test 11 — Breakfast & Meal History Handling (Known vs Unknown)
+Test 12 — Full Production Conversation Sequence
 """
 
 import pytest
@@ -27,7 +29,7 @@ def test_01_pain_character_consistency():
     Doctor: 'Can you describe what the pain feels like?'
     Expected:
     Response must remain consistent with chest pressure/heaviness and elephant on chest.
-    Must NOT return 'I haven't really noticed anything like that, doctor.'
+    Must NOT repeat unrelated opening symptoms (dizziness/office) or return symptom fallback.
     """
     session_id = f"test-char-{uuid.uuid4()}"
     case_id = "chest_pain_001"
@@ -42,6 +44,8 @@ def test_01_pain_character_consistency():
     assert "haven't really noticed" not in reply_low
     assert "anything like that" not in reply_low
     assert any(k in reply_low for k in ["pressure", "elephant", "crushing", "squeezing", "heavy", "chest"])
+    assert "dizzy" not in reply_low
+    assert "office" not in reply_low
 
 
 def test_02_severity():
@@ -187,7 +191,6 @@ def test_06_unknown_information_handling():
 
     reply_low = res["reply"].lower()
     assert "no" in reply_low or "haven't noticed" in reply_low
-    # Ensure no invented ear conditions
     assert "tinnitus" not in reply_low
     assert "otitis" not in reply_low
 
@@ -341,6 +344,8 @@ def test_09_intent_classification_categories():
         ("Let me examine your chest.", "EXAM_REQUEST", IntentCategory.EXAMINATION_REQUEST),
         ("Let's order an ECG.", "INVESTIGATION_REQUEST", IntentCategory.INVESTIGATION_REQUEST),
         ("What is your favorite movie?", "OFF_TOPIC", IntentCategory.OFF_TOPIC),
+        ("had you breakfast", "HISTORY_QUESTION", IntentCategory.SOCIAL_HISTORY),
+        ("what was you eat in your breakfast", "HISTORY_QUESTION", IntentCategory.SOCIAL_HISTORY),
         ("...", "UNKNOWN", IntentCategory.UNCLEAR),
     ]
 
@@ -376,3 +381,144 @@ def test_10_diagnosis_and_examination_interactions():
     reply_exam = res_exam["reply"].lower()
     assert "sure" in reply_exam or "ahead" in reply_exam or "okay" in reply_exam
     assert "haven't really noticed" not in reply_exam
+
+
+def test_11_breakfast_and_diet_handling():
+    """
+    Test 11: Food and breakfast inquiry handling.
+    Must NOT return generic symptom fallback ("I haven't really noticed anything like that").
+    Must communicate uncertainty/unknown properly.
+    """
+    session_id = f"test-diet-{uuid.uuid4()}"
+    case_id = "chest_pain_001"
+
+    # Inquiries about breakfast
+    r1 = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="had you breakfast",
+        session_id=session_id
+    )
+    reply1 = r1["reply"].lower()
+    assert "haven't really noticed anything like that" not in reply1
+    assert any(k in reply1 for k in ["breakfast", "remember", "eat", "ate", "rushing", "office"])
+
+    r2 = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="what was you eat in your breakfast",
+        session_id=session_id
+    )
+    reply2 = r2["reply"].lower()
+    assert "haven't really noticed anything like that" not in reply2
+    assert any(k in reply2 for k in ["breakfast", "remember", "eat", "ate", "rushing", "office"])
+
+
+def test_12_full_production_conversation_sequence():
+    """
+    Test 12: Full Production Conversation from User Prompt
+    1. Patient: Initial statement
+    2. Doctor: "Can you describe what the pain feels like?" -> Focused pain character
+    3. Doctor: "Have you experienced any cold sweats, nausea, or vomiting?" -> Positive cold sweat
+    4. Doctor: "you should take medicine home and take rest" -> Management/Medication ack
+    5. Doctor: "you can take a Paracetamol if you feel like a fever" -> Medication statement ack
+    6. Doctor: "do you have a PCOD also" -> Not applicable (male)
+    7. Doctor: "had you breakfast" -> Controlled unknown (breakfast)
+    8. Doctor: "what was you eat in your breakfast" -> Controlled unknown (breakfast)
+    9. Doctor: "are you sure?" -> Clarification confirmation
+    10. Doctor: "How severe is your discomfort?" (twice) -> 8/10 consistent
+    """
+    session_id = f"test-full-seq-{uuid.uuid4()}"
+    case_id = "chest_pain_001"
+
+    # 1. Pain character
+    t1 = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="Can you describe what the pain feels like?",
+        session_id=session_id
+    )
+    rep1 = t1["reply"].lower()
+    assert any(k in rep1 for k in ["pressure", "elephant", "crushing", "squeezing", "heavy", "chest"])
+    assert "dizzy" not in rep1
+
+    # 2. Associated symptoms
+    t2 = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="Have you experienced any cold sweats, nausea, or vomiting?",
+        session_id=session_id
+    )
+    rep2 = t2["reply"].lower()
+    assert any(k in rep2 for k in ["sweat", "yes"])
+
+    # 3. Management statement
+    t3 = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="you should take medicine home and take rest",
+        session_id=session_id
+    )
+    rep3 = t3["reply"].lower()
+    assert "haven't really noticed" not in rep3
+    assert any(k in rep3 for k in ["okay", "doctor", "rest", "relieve", "chest pain", "breathe"])
+
+    # 4. Medication statement
+    t4 = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="you can take a Paracetamol if you feel like a fever",
+        session_id=session_id
+    )
+    rep4 = t4["reply"].lower()
+    assert "haven't really noticed" not in rep4
+    assert any(k in rep4 for k in ["okay", "doctor", "relieve", "chest pain", "breathe", "paracetamol"])
+
+    # 5. PCOD (male)
+    t5 = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="do you have a PCOD also",
+        session_id=session_id
+    )
+    rep5 = t5["reply"].lower()
+    assert "male" in rep5 or "doesn't apply" in rep5
+
+    # 6. Breakfast
+    t6 = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="had you breakfast",
+        session_id=session_id
+    )
+    rep6 = t6["reply"].lower()
+    assert "haven't really noticed anything like that" not in rep6
+    assert any(k in rep6 for k in ["breakfast", "remember", "eat", "ate", "rushing", "office"])
+
+    # 7. Breakfast details
+    t7 = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="what was you eat in your breakfast",
+        session_id=session_id
+    )
+    rep7 = t7["reply"].lower()
+    assert "haven't really noticed anything like that" not in rep7
+    assert any(k in rep7 for k in ["breakfast", "remember", "eat", "ate", "rushing", "office"])
+
+    # 8. Clarification
+    t8 = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="are you sure?",
+        session_id=session_id
+    )
+    rep8 = t8["reply"].lower()
+    assert "haven't really noticed" not in rep8
+    assert any(k in rep8 for k in ["yes", "sure", "definitely", "feel"])
+
+    # 9. Severity ask 1
+    t9 = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="How severe is your discomfort?",
+        session_id=session_id
+    )
+    assert "8" in t9["reply"] or "eight" in t9["reply"].lower()
+
+    # 10. Severity ask 2
+    t10 = ai_orchestrator.process_turn_sync(
+        case_id=case_id,
+        user_message="How severe is your discomfort?",
+        session_id=session_id
+    )
+    assert "8" in t10["reply"] or "eight" in t10["reply"].lower()

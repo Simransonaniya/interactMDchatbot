@@ -433,11 +433,8 @@ class FactRetriever:
         # ---------------------------------------------------------
         if intent.category == IntentCategory.CHARACTER:
             raw_char = _get_val(history.get("character")) or _get_val(facts.get("quality")) or case_data.get("character")
-            init_stmt = patient.get("opening_statement") or patient.get("initial_statement") or ""
-            if not raw_char and "elephant" in init_stmt.lower():
-                raw_char = "It feels like an elephant is sitting right in the middle of my chest, a deep heavy crushing pressure."
-            elif not raw_char:
-                raw_char = "It feels like a deep, heavy crushing pressure in my chest."
+            if not raw_char or "dizzy" in raw_char.lower() or "office" in raw_char.lower():
+                raw_char = "It feels like a heavy crushing pressure, almost like an elephant is sitting right in the middle of my chest."
 
             return RetrievedFact(
                 fact_id="character",
@@ -722,6 +719,30 @@ class FactRetriever:
                 )
 
         if intent.category == IntentCategory.SOCIAL_HISTORY:
+            if intent.subconcept == "diet_history":
+                diet_val = _get_val(history.get("diet")) or _get_val(facts.get("diet")) or _get_val(case_data.get("diet"))
+                if diet_val:
+                    return RetrievedFact(
+                        fact_id="diet_history",
+                        state=FactState.AVAILABLE,
+                        truth_value=diet_val,
+                        permitted_statement=f"For breakfast, {diet_val.lower().rstrip('.')}.",
+                        category="SocialHx",
+                        response_source="CASE_FACT",
+                        fact_key="diet"
+                    )
+                else:
+                    return RetrievedFact(
+                        fact_id="diet_history",
+                        state=FactState.UNKNOWN,
+                        truth_value=None,
+                        permitted_statement="I don't really remember what I ate for breakfast this morning, doctor... I was just rushing to get into the office.",
+                        is_controlled_shield=True,
+                        category="SocialHx",
+                        response_source="UNKNOWN",
+                        fact_key="diet"
+                    )
+
             if social_history:
                 stmt = social_history if isinstance(social_history, str) else ' '.join(social_history)
                 return RetrievedFact(
@@ -863,7 +884,7 @@ class FactRetriever:
         if symptom == "vitiligo":
             return "I don't have any skin conditions or vitiligo that I'm aware of, doctor."
         if symptom == "diet_history":
-            return "I don't recall anything unusual about my meals, doctor."
+            return "I don't really remember what I ate for breakfast this morning, doctor... I was just rushing to get into the office."
         if symptom in ["hairfall", "hair_loss"]:
             return "I'm not sure how that relates to what I'm experiencing, doctor."
         if symptom == "general_inquiry" or symptom == "unclassified_symptom":

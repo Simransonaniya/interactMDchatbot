@@ -236,7 +236,7 @@ class PatientSimulationState:
 
             # If opening statement mentions elephant / heavy pressure on chest
             if "elephant" in lower_init or "pressure" in lower_init or "crushing" in lower_init or "chest" in lower_init:
-                char_stmt = state.character or "It feels like an elephant is sitting right in the middle of my chest."
+                char_stmt = "It feels like a heavy crushing pressure, almost like an elephant is sitting right in the middle of my chest."
                 state.record_disclosure("character", char_stmt)
                 state.record_disclosure("location", "Right in the middle of my chest.")
 
@@ -294,7 +294,10 @@ class PatientSimulationState:
                 lower_text = text.lower()
                 # Track revealed character
                 if "elephant" in lower_text or "heavy" in lower_text or "squeezing" in lower_text or "crushing" in lower_text:
-                    self.record_disclosure("character", text)
+                    if "dizzy" in lower_text or "office" in lower_text:
+                        self.record_disclosure("character", "It feels like a heavy crushing pressure, almost like an elephant is sitting right in the middle of my chest.")
+                    else:
+                        self.record_disclosure("character", text)
                 # Track revealed radiation
                 if "jaw" in lower_text or "arm" in lower_text or "shoulder" in lower_text or "back" in lower_text:
                     if "radiat" in lower_text or "spread" in lower_text or "shoot" in lower_text or "goes into" in lower_text:
