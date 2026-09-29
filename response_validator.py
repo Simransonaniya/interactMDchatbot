@@ -173,7 +173,7 @@ class PatientResponseValidator:
 
             # D. Intent / Topic Cross-Contamination Consistency (Medication vs Diet)
             last_topic = getattr(session_state, "last_topic", "") or ""
-            if last_topic in ["medications", "medication", "medication_adherence", "inhaler_use"]:
+            if last_topic in ["medications", "medication", "medication_adherence", "inhaler_use", "medication_dosage", "medication_purpose", "medication_frequency"]:
                 if any(k in lower_text for k in ["what i ate", "what i had for lunch", "what i had for dinner", "what i had for breakfast", "remember what i ate", "remember what i had"]):
                     return ValidationResult(
                         is_valid=False,
@@ -186,6 +186,32 @@ class PatientResponseValidator:
                         is_valid=False,
                         sanitized_text=fallback_statement,
                         reason="Intent cross-contamination: medication statement produced for diet intent"
+                    )
+
+            # E. Medication Grounding & Hallucination Prevention
+            case_meds_text = " ".join(session_state.medications).lower() if session_state.medications else ""
+            known_drugs = ["lisinopril", "metoprolol", "furosemide", "losartan", "hydrochlorothiazide", "metformin", "insulin", "warfarin", "digoxin"]
+            for kd in known_drugs:
+                if kd in lower_text and kd not in case_meds_text and kd not in fallback_statement.lower():
+                    return ValidationResult(
+                        is_valid=False,
+                        sanitized_text=fallback_statement,
+                        reason=f"Medication hallucination: unprescribed drug '{kd}' mentioned"
+                    )
+
+            # F. Block Unsolicited Prescribing Advice from Patient
+            unsolicited_prescribing_patterns = [
+                r"\byou should (start|take|prescribe)\b",
+                r"\bincrease the dose\b",
+                r"\bstop medication\b",
+                r"\btake \d+ mg\b"
+            ]
+            for pat in unsolicited_prescribing_patterns:
+                if re.search(pat, lower_text) and not re.search(pat, fallback_statement.lower()):
+                    return ValidationResult(
+                        is_valid=False,
+                        sanitized_text=fallback_statement,
+                        reason="Unsolicited prescribing advice detected"
                     )
 
         # 8. Truncate overly verbose responses to 2-3 sentences max

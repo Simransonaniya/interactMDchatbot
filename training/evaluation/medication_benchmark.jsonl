@@ -1,0 +1,28 @@
+{"query": "did you eat breakfast", "expected_intent": "DIET_HISTORY", "expected_topic": "diet", "expected_slot": "breakfast"}
+{"query": "what did you eat for dinner", "expected_intent": "DIET_HISTORY", "expected_topic": "diet", "expected_slot": "dinner"}
+{"query": "did you eat medicine", "expected_intent": "MEDICATION_HISTORY", "expected_topic": "medication", "expected_slot": "current_medications"}
+{"query": "did you eat medcian", "expected_intent": "MEDICATION_HISTORY", "expected_topic": "medication", "expected_slot": "current_medications"}
+{"query": "what medicine do you take", "expected_intent": "MEDICATION_HISTORY", "expected_topic": "medication", "expected_slot": "current_medications"}
+{"query": "what medications are you currently on", "expected_intent": "MEDICATION_HISTORY", "expected_topic": "medication", "expected_slot": "current_medications"}
+{"query": "what meds are you taking", "expected_intent": "MEDICATION_HISTORY", "expected_topic": "medication", "expected_slot": "current_medications"}
+{"query": "what tablets do you take", "expected_intent": "MEDICATION_HISTORY", "expected_topic": "medication", "expected_slot": "current_medications"}
+{"query": "did you take any medicine", "expected_intent": "MEDICATION_HISTORY", "expected_topic": "medication", "expected_slot": "current_medications"}
+{"query": "did you miss your atorvastatin", "expected_intent": "MEDICATION_ADHERENCE", "expected_topic": "medication", "expected_slot": "medication_adherence"}
+{"query": "do you take your medicine regularly", "expected_intent": "MEDICATION_ADHERENCE", "expected_topic": "medication", "expected_slot": "medication_adherence"}
+{"query": "did you take your morning medicine", "expected_intent": "MEDICATION_ADHERENCE", "expected_topic": "medication", "expected_slot": "medication_adherence"}
+{"query": "did you miss any doses", "expected_intent": "MEDICATION_ADHERENCE", "expected_topic": "medication", "expected_slot": "medication_adherence"}
+{"query": "take paracetamol", "expected_intent": "MEDICATION_STATEMENT", "expected_topic": "medication", "expected_slot": "treatment_order"}
+{"query": "take this tablet", "expected_intent": "MEDICATION_STATEMENT", "expected_topic": "medication", "expected_slot": "treatment_order"}
+{"query": "you should take this medication", "expected_intent": "MEDICATION_STATEMENT", "expected_topic": "medication", "expected_slot": "treatment_order"}
+{"query": "what is amlodipine for", "expected_intent": "MEDICATION_PURPOSE_QUERY", "expected_topic": "medication", "expected_slot": "medication_purpose"}
+{"query": "why do you take atorvastatin", "expected_intent": "MEDICATION_PURPOSE_QUERY", "expected_topic": "medication", "expected_slot": "medication_purpose"}
+{"query": "what dose of amlodipine do you take", "expected_intent": "MEDICATION_DOSAGE_QUERY", "expected_topic": "medication", "expected_slot": "medication_dosage"}
+{"query": "how many milligrams", "expected_intent": "MEDICATION_DOSAGE_QUERY", "expected_topic": "medication", "expected_slot": "medication_dosage"}
+{"query": "how often do you take it", "expected_intent": "MEDICATION_FREQUENCY_QUERY", "expected_topic": "medication", "expected_slot": "medication_frequency"}
+{"query": "do you take it every day", "expected_intent": "MEDICATION_FREQUENCY_QUERY", "expected_topic": "medication", "expected_slot": "medication_frequency"}
+{"query": "is it a tablet", "expected_intent": "MEDICATION_ROUTE_QUERY", "expected_topic": "medication", "expected_slot": "medication_route_form"}
+{"query": "is it an inhaler", "expected_intent": "MEDICATION_ROUTE_QUERY", "expected_topic": "medication", "expected_slot": "medication_route_form"}
+{"query": "does this medicine cause dizziness", "expected_intent": "MEDICATION_SIDE_EFFECT_QUERY", "expected_topic": "medication", "expected_slot": "medication_side_effects"}
+{"query": "any side effects from the tablet", "expected_intent": "MEDICATION_SIDE_EFFECT_QUERY", "expected_topic": "medication", "expected_slot": "medication_side_effects"}
+{"query": "are you allergic to any medicine", "expected_intent": "MEDICATION_ALLERGY_QUERY", "expected_topic": "allergies", "expected_slot": "drug_allergies"}
+{"query": "are you allergic to penicillin", "expected_intent": "MEDICATION_ALLERGY_QUERY", "expected_topic": "allergies", "expected_slot": "drug_allergies"}

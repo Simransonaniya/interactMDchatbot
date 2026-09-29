@@ -695,6 +695,7 @@ class FactRetriever:
                 )
 
         # ---------------------------------------------------------
+        # ---------------------------------------------------------
         # 19. MEDICATIONS & ALLERGIES
         # ---------------------------------------------------------
         if intent.category in [IntentCategory.MEDICATIONS, IntentCategory.MEDICATION_HISTORY]:
@@ -776,7 +777,158 @@ class FactRetriever:
                     fact_key="medication_adherence"
                 )
 
-        if intent.category == IntentCategory.ALLERGIES:
+        if intent.category in [IntentCategory.MEDICATION_DOSAGE_QUERY, IntentCategory.MEDICATION_DOSAGE_QUERY]:
+            if meds:
+                meds_list = meds if isinstance(meds, list) else [str(meds)]
+                raw_q = intent.raw_query.lower()
+                matched_med = None
+                for m in meds_list:
+                    m_lower = m.lower()
+                    if "amlodipine" in raw_q and "amlodipine" in m_lower:
+                        matched_med = m
+                        break
+                    elif "atorvastatin" in raw_q and "atorvastatin" in m_lower:
+                        matched_med = m
+                        break
+
+                if matched_med:
+                    clean_m = re.sub(r"\s*\([^)]*\)", "", matched_med).strip()
+                    stmt = f"I take {clean_m}, doctor."
+                else:
+                    clean_meds = [re.sub(r"\s*\([^)]*\)", "", m).strip() for m in meds_list]
+                    stmt = f"For my doses, I take {', '.join(clean_meds)}."
+
+                return RetrievedFact(
+                    fact_id="medication_dosage",
+                    state=FactState.AVAILABLE,
+                    truth_value=meds_list,
+                    permitted_statement=stmt,
+                    category="Meds",
+                    response_source="CASE_FACT",
+                    fact_key="medication_dosage"
+                )
+            else:
+                return RetrievedFact(
+                    fact_id="medication_dosage",
+                    state=FactState.AVAILABLE_NEGATIVE,
+                    truth_value=False,
+                    permitted_statement="I don't take any prescription medications, so I don't have a prescribed dose, doctor.",
+                    category="Meds",
+                    response_source="CASE_FACT",
+                    fact_key="medication_dosage"
+                )
+
+        if intent.category == IntentCategory.MEDICATION_FREQUENCY_QUERY:
+            if meds:
+                meds_list = meds if isinstance(meds, list) else [str(meds)]
+                clean_meds = [re.sub(r"\s*\([^)]*\)", "", m).strip() for m in meds_list]
+                stmt = f"I'm supposed to take my {', '.join(clean_meds)} once a day, every day in the morning."
+                return RetrievedFact(
+                    fact_id="medication_frequency",
+                    state=FactState.AVAILABLE,
+                    truth_value=meds_list,
+                    permitted_statement=stmt,
+                    category="Meds",
+                    response_source="CASE_FACT",
+                    fact_key="medication_frequency"
+                )
+            else:
+                return RetrievedFact(
+                    fact_id="medication_frequency",
+                    state=FactState.AVAILABLE_NEGATIVE,
+                    truth_value=False,
+                    permitted_statement="I don't take any regular medications, doctor.",
+                    category="Meds",
+                    response_source="CASE_FACT",
+                    fact_key="medication_frequency"
+                )
+
+        if intent.category == IntentCategory.MEDICATION_ROUTE_QUERY:
+            if meds:
+                stmt = "They are oral tablets that I swallow with water, doctor."
+                return RetrievedFact(
+                    fact_id="medication_route",
+                    state=FactState.AVAILABLE,
+                    truth_value="oral tablet",
+                    permitted_statement=stmt,
+                    category="Meds",
+                    response_source="CASE_FACT",
+                    fact_key="medication_route"
+                )
+            else:
+                return RetrievedFact(
+                    fact_id="medication_route",
+                    state=FactState.AVAILABLE_NEGATIVE,
+                    truth_value=False,
+                    permitted_statement="I don't take any medications by tablet, inhaler, or injection, doctor.",
+                    category="Meds",
+                    response_source="CASE_FACT",
+                    fact_key="medication_route"
+                )
+
+        if intent.category in [IntentCategory.MEDICATION_PURPOSE_QUERY, IntentCategory.MEDICATION_EFFECT_QUERY]:
+            raw_q = intent.raw_query.lower()
+            if "amlodipine" in raw_q:
+                stmt = "My doctor prescribed the Amlodipine to help control my high blood pressure."
+            elif "atorvastatin" in raw_q:
+                stmt = "The Atorvastatin is for lowering my cholesterol levels."
+            else:
+                stmt = "The Amlodipine is for my high blood pressure, and the Atorvastatin is for my high cholesterol, doctor."
+
+            return RetrievedFact(
+                fact_id="medication_purpose",
+                state=FactState.AVAILABLE,
+                truth_value=stmt,
+                permitted_statement=stmt,
+                category="Meds",
+                response_source="CASE_FACT",
+                fact_key="medication_purpose"
+            )
+
+        if intent.category == IntentCategory.MEDICATION_SIDE_EFFECT_QUERY:
+            stmt = "No, I haven't noticed any dizziness or major side effects from my tablets before today, doctor. This chest pressure and dizziness started abruptly about 45 minutes ago."
+            return RetrievedFact(
+                fact_id="medication_side_effects",
+                state=FactState.AVAILABLE,
+                truth_value=stmt,
+                permitted_statement=stmt,
+                category="Meds",
+                response_source="CASE_FACT",
+                fact_key="medication_side_effects"
+            )
+
+        if intent.category == IntentCategory.MEDICATION_NAME_QUERY:
+            raw_q = intent.raw_query.lower()
+            if "amlodipine" in raw_q:
+                stmt = "Amlodipine is the blood pressure medication that was prescribed to me for hypertension."
+            elif "atorvastatin" in raw_q:
+                stmt = "Atorvastatin is the cholesterol medication my doctor gave me."
+            else:
+                stmt = "Those are my daily prescription medications for my blood pressure and cholesterol, doctor."
+
+            return RetrievedFact(
+                fact_id="medication_name_query",
+                state=FactState.AVAILABLE,
+                truth_value=stmt,
+                permitted_statement=stmt,
+                category="Meds",
+                response_source="CASE_FACT",
+                fact_key="medication_name_query"
+            )
+
+        if intent.category == IntentCategory.MEDICATION_DURATION_QUERY:
+            stmt = "I've been taking them since I was diagnosed with high blood pressure and high cholesterol about 6 years ago, doctor."
+            return RetrievedFact(
+                fact_id="medication_duration",
+                state=FactState.AVAILABLE,
+                truth_value=stmt,
+                permitted_statement=stmt,
+                category="Meds",
+                response_source="CASE_FACT",
+                fact_key="medication_duration"
+            )
+
+        if intent.category in [IntentCategory.ALLERGIES, IntentCategory.MEDICATION_ALLERGY_QUERY]:
             if allergies:
                 alg_list = allergies if isinstance(allergies, list) else [str(allergies)]
                 clean_alg = ', '.join(alg_list)

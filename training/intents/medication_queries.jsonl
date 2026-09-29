@@ -1,0 +1,29 @@
+{"text": "what is amlodipine for", "intent": "MEDICATION_PURPOSE_QUERY", "slot": "medication_purpose", "entities": [{"text": "amlodipine", "type": "MEDICATION"}]}
+{"text": "why are you taking atorvastatin", "intent": "MEDICATION_PURPOSE_QUERY", "slot": "medication_purpose", "entities": [{"text": "atorvastatin", "type": "MEDICATION"}]}
+{"text": "what does this medicine treat", "intent": "MEDICATION_PURPOSE_QUERY", "slot": "medication_purpose", "entities": [{"text": "medicine", "type": "MEDICATION"}]}
+{"text": "what is this tablet for", "intent": "MEDICATION_PURPOSE_QUERY", "slot": "medication_purpose", "entities": [{"text": "tablet", "type": "MEDICATION"}]}
+{"text": "how much amlodipine do you take", "intent": "MEDICATION_DOSAGE_QUERY", "slot": "medication_dosage", "entities": [{"text": "amlodipine", "type": "MEDICATION"}]}
+{"text": "what dose of amlodipine do you take", "intent": "MEDICATION_DOSAGE_QUERY", "slot": "medication_dosage", "entities": [{"text": "amlodipine", "type": "MEDICATION"}]}
+{"text": "what dose are you on", "intent": "MEDICATION_DOSAGE_QUERY", "slot": "medication_dosage", "entities": [{"text": "dose", "type": "DOSAGE"}]}
+{"text": "how many milligrams", "intent": "MEDICATION_DOSAGE_QUERY", "slot": "medication_dosage", "entities": [{"text": "milligrams", "type": "UNIT"}]}
+{"text": "what strength is the tablet", "intent": "MEDICATION_DOSAGE_QUERY", "slot": "medication_dosage", "entities": [{"text": "tablet", "type": "MEDICATION"}]}
+{"text": "how often do you take it", "intent": "MEDICATION_FREQUENCY_QUERY", "slot": "medication_frequency", "entities": []}
+{"text": "how many times a day", "intent": "MEDICATION_FREQUENCY_QUERY", "slot": "medication_frequency", "entities": []}
+{"text": "do you take it every day", "intent": "MEDICATION_FREQUENCY_QUERY", "slot": "medication_frequency", "entities": []}
+{"text": "morning or night", "intent": "MEDICATION_FREQUENCY_QUERY", "slot": "medication_frequency", "entities": []}
+{"text": "is it a tablet", "intent": "MEDICATION_ROUTE_QUERY", "slot": "medication_route_form", "entities": [{"text": "tablet", "type": "FORM"}]}
+{"text": "is it an inhaler", "intent": "MEDICATION_ROUTE_QUERY", "slot": "medication_route_form", "entities": [{"text": "inhaler", "type": "FORM"}]}
+{"text": "do you inject it", "intent": "MEDICATION_ROUTE_QUERY", "slot": "medication_route_form", "entities": [{"text": "inject", "type": "ROUTE"}]}
+{"text": "how do you take it", "intent": "MEDICATION_ROUTE_QUERY", "slot": "medication_route_form", "entities": []}
+{"text": "is it oral", "intent": "MEDICATION_ROUTE_QUERY", "slot": "medication_route_form", "entities": [{"text": "oral", "type": "ROUTE"}]}
+{"text": "does this medicine cause dizziness", "intent": "MEDICATION_SIDE_EFFECT_QUERY", "slot": "medication_side_effects", "entities": [{"text": "medicine", "type": "MEDICATION"}, {"text": "dizziness", "type": "SYMPTOM"}]}
+{"text": "any side effects from the tablet", "intent": "MEDICATION_SIDE_EFFECT_QUERY", "slot": "medication_side_effects", "entities": [{"text": "tablet", "type": "MEDICATION"}]}
+{"text": "did the tablet cause nausea", "intent": "MEDICATION_SIDE_EFFECT_QUERY", "slot": "medication_side_effects", "entities": [{"text": "tablet", "type": "MEDICATION"}, {"text": "nausea", "type": "SYMPTOM"}]}
+{"text": "are you having problems from the medication", "intent": "MEDICATION_SIDE_EFFECT_QUERY", "slot": "medication_side_effects", "entities": [{"text": "medication", "type": "MEDICATION"}]}
+{"text": "are you allergic to any medicine", "intent": "MEDICATION_ALLERGY_QUERY", "slot": "drug_allergies", "entities": [{"text": "medicine", "type": "MEDICATION"}]}
+{"text": "any drug allergies", "intent": "MEDICATION_ALLERGY_QUERY", "slot": "drug_allergies", "entities": [{"text": "drug", "type": "MEDICATION"}]}
+{"text": "are you allergic to penicillin", "intent": "MEDICATION_ALLERGY_QUERY", "slot": "drug_allergies", "entities": [{"text": "penicillin", "type": "MEDICATION"}]}
+{"text": "which medicines are you allergic to", "intent": "MEDICATION_ALLERGY_QUERY", "slot": "drug_allergies", "entities": [{"text": "medicines", "type": "MEDICATION"}]}
+{"text": "how long have you been taking it", "intent": "MEDICATION_DURATION_QUERY", "slot": "medication_duration", "entities": []}
+{"text": "what is amlodipine", "intent": "MEDICATION_NAME_QUERY", "slot": "medication_name_query", "entities": [{"text": "amlodipine", "type": "MEDICATION"}]}
+{"text": "tell me about atorvastatin", "intent": "MEDICATION_NAME_QUERY", "slot": "medication_name_query", "entities": [{"text": "atorvastatin", "type": "MEDICATION"}]}

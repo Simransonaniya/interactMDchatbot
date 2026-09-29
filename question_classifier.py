@@ -2,18 +2,20 @@
 InteractMD — Question & Clinical Intent Classifier.
 Performs semantic intent classification covering:
 - HISTORY_QUESTION (OPQRST dimensions, associated symptoms, pertinent negatives, PMH, meds, allergies, family/social history)
-- CLARIFICATION ("Are you sure?", "Really?", "Can you explain that again?")
-- CONFIRMATION ("Is that correct?", "So it's been going on for 45 minutes?")
-- EMPATHY_REASSURANCE ("Take a slow breath", "I'm here with you")
-- MANAGEMENT_STATEMENT ("You should rest", "Let's have you sit down", "We'll monitor you")
+- MEDICATION_HISTORY ("What medicines do you take?", "Did you eat medcian?")
+- MEDICATION_ADHERENCE ("Did you take your medicine today?", "Have you missed any doses?")
 - MEDICATION_STATEMENT ("Take this medication", "You should take tablet", "Take paracetamol")
 - MEDICATION_NAME_FRAGMENT ("niciplus", "paracetomol tablet", "amlodipine")
-- MEDICATION_ADHERENCE ("Did you take your medicine today?", "Have you missed any doses?")
-- DIAGNOSIS_STATEMENT ("I think this is a heart attack", "This appears to be cardiac")
-- EXAM_REQUEST ("I'm going to examine your heart", "Let me listen to your chest")
-- INVESTIGATION_REQUEST ("Let's order an ECG", "We should check troponin")
-- OFF_TOPIC ("hairfall", "favorite movie", "weather")
-- UNKNOWN / UNCLEAR ("how was it?", single characters)
+- MEDICATION_NAME_QUERY ("What is amlodipine?", "What is this medicine?")
+- MEDICATION_PURPOSE_QUERY ("What is amlodipine for?", "Why are you taking atorvastatin?")
+- MEDICATION_DOSAGE_QUERY ("What dose of amlodipine do you take?", "How many milligrams?")
+- MEDICATION_FREQUENCY_QUERY ("How often do you take it?", "Do you take it every day?")
+- MEDICATION_ROUTE_QUERY ("Is it a tablet?", "Is it an inhaler?", "Do you inject it?")
+- MEDICATION_SIDE_EFFECT_QUERY ("Does this medicine make you dizzy?", "Any side effects?")
+- MEDICATION_ALLERGY_QUERY ("Are you allergic to any medicine?", "Any drug allergies?")
+- MEDICATION_DURATION_QUERY ("How long have you been taking it?")
+- CLARIFICATION, CONFIRMATION, CHALLENGE, EMPATHY_REASSURANCE, MANAGEMENT_STATEMENT
+- DIAGNOSIS_STATEMENT, EXAM_REQUEST, INVESTIGATION_REQUEST, OFF_TOPIC, UNKNOWN
 """
 
 import re
@@ -21,9 +23,9 @@ from enum import Enum
 from typing import Optional, Dict, Any, List, Tuple
 
 from medical_nlu.normalizer import MedicalNormalizer, NormalizedText
-from medical_nlu.medication_lexicon import MedicationLexicon
+from medical_nlu.medication_catalog import MedicationCatalog
 from medical_nlu.entity_extractor import MedicalEntityExtractor, MedicalEntity
-from medical_nlu.intent_classifier import MedicalIntentClassifier, MedicalIntent, StructuredNLUResult
+from medical_nlu.intent_classifier import MedicalIntentClassifier, MedicalIntent, StructuredNLUResult, ExtractedMedicationSlot
 
 
 class IntentCategory(str, Enum):
@@ -38,6 +40,16 @@ class IntentCategory(str, Enum):
     MEDICATION_NAME_FRAGMENT = "MEDICATION_NAME_FRAGMENT"
     MEDICATION_ADHERENCE = "MEDICATION_ADHERENCE"
     MEDICATION_HISTORY = "MEDICATION_HISTORY"
+    MEDICATION_NAME_QUERY = "MEDICATION_NAME_QUERY"
+    MEDICATION_PURPOSE_QUERY = "MEDICATION_PURPOSE_QUERY"
+    MEDICATION_EFFECT_QUERY = "MEDICATION_EFFECT_QUERY"
+    MEDICATION_DOSAGE_QUERY = "MEDICATION_DOSAGE_QUERY"
+    MEDICATION_FREQUENCY_QUERY = "MEDICATION_FREQUENCY_QUERY"
+    MEDICATION_ROUTE_QUERY = "MEDICATION_ROUTE_QUERY"
+    MEDICATION_SIDE_EFFECT_QUERY = "MEDICATION_SIDE_EFFECT_QUERY"
+    MEDICATION_ALLERGY_QUERY = "MEDICATION_ALLERGY_QUERY"
+    MEDICATION_DURATION_QUERY = "MEDICATION_DURATION_QUERY"
+    MEDICATION_UNKNOWN = "MEDICATION_UNKNOWN"
     DIET_HISTORY = "DIET_HISTORY"
     DIAGNOSIS_STATEMENT = "DIAGNOSIS_STATEMENT"
     EXAM_REQUEST = "EXAM_REQUEST"
@@ -92,9 +104,11 @@ class ClassifiedIntent:
         referenced_topic: Optional[str] = None,
         referenced_slot: Optional[str] = None,
         entities: Optional[List[Any]] = None,
+        extracted_medication: Optional[ExtractedMedicationSlot] = None,
         confidence: float = 1.0,
         topic: Optional[str] = None,
-        slot: Optional[str] = None
+        slot: Optional[str] = None,
+        negated: bool = False
     ):
         self.raw_query = raw_query
         self.category = category
@@ -112,9 +126,11 @@ class ClassifiedIntent:
         self.referenced_topic = referenced_topic
         self.referenced_slot = referenced_slot
         self.entities = entities or []
+        self.extracted_medication = extracted_medication
         self.confidence = confidence
         self.topic = topic or subconcept or category.value
         self.slot = slot or (self.slots[0] if self.slots else self.subconcept)
+        self.negated = negated
 
     @property
     def primary_type(self) -> str:
@@ -126,10 +142,13 @@ class ClassifiedIntent:
             IntentCategory.ASSOCIATED_SYMPTOM, IntentCategory.PAST_MEDICAL_HISTORY,
             IntentCategory.MEDICATIONS, IntentCategory.MEDICATION_HISTORY, IntentCategory.ALLERGIES,
             IntentCategory.FAMILY_HISTORY, IntentCategory.SOCIAL_HISTORY, IntentCategory.DIET_HISTORY,
-            IntentCategory.OPENING_COMPLAINT, IntentCategory.GENDER_INAPPLICABLE
+            IntentCategory.OPENING_COMPLAINT, IntentCategory.GENDER_INAPPLICABLE,
+            IntentCategory.MEDICATION_ADHERENCE, IntentCategory.MEDICATION_NAME_QUERY,
+            IntentCategory.MEDICATION_PURPOSE_QUERY, IntentCategory.MEDICATION_EFFECT_QUERY,
+            IntentCategory.MEDICATION_DOSAGE_QUERY, IntentCategory.MEDICATION_FREQUENCY_QUERY,
+            IntentCategory.MEDICATION_ROUTE_QUERY, IntentCategory.MEDICATION_SIDE_EFFECT_QUERY,
+            IntentCategory.MEDICATION_ALLERGY_QUERY, IntentCategory.MEDICATION_DURATION_QUERY
         ]:
-            return "HISTORY_QUESTION"
-        if self.category == IntentCategory.MEDICATION_ADHERENCE:
             return "HISTORY_QUESTION"
         if self.category in [IntentCategory.EMPATHY, IntentCategory.EMPATHY_REASSURANCE]:
             return "EMPATHY_REASSURANCE"
@@ -137,7 +156,7 @@ class ClassifiedIntent:
             return "EXAM_REQUEST"
         if self.category in [IntentCategory.OUT_OF_SCOPE, IntentCategory.OFF_TOPIC]:
             return "OFF_TOPIC"
-        if self.category in [IntentCategory.UNCLEAR, IntentCategory.UNKNOWN]:
+        if self.category in [IntentCategory.UNCLEAR, IntentCategory.UNKNOWN, IntentCategory.MEDICATION_UNKNOWN]:
             return "UNKNOWN"
         if self.category == IntentCategory.CHALLENGE:
             return "CHALLENGE"
@@ -149,45 +168,6 @@ class ClassifiedIntent:
 
     def __repr__(self):
         return f"<ClassifiedIntent category={self.category.value} subconcept={self.subconcept} slots={self.slots} time={self.time_reference} relationship={self.relationship}>"
-
-
-# Helper normalization functions
-def normalize_message(query: str) -> str:
-    norm = MedicalNormalizer.normalize(query)
-    return norm.normalized_text
-
-
-def detect_medication_entity(query: str, raw_norm: str) -> Optional[str]:
-    lex = MedicationLexicon.get_instance()
-    m = lex.match_medication(raw_norm) or lex.match_medication(query)
-    if m:
-        return m["canonical"]
-    return None
-
-
-def extract_diet_slots_and_time(query: str) -> Tuple[List[str], str]:
-    q = query.lower()
-    slots = []
-    if "breakfast" in q:
-        slots.append("breakfast")
-    if "lunch" in q:
-        slots.append("lunch")
-    if "dinner" in q or "supper" in q:
-        slots.append("dinner")
-    if "snack" in q or "snacks" in q:
-        slots.append("snacks")
-    if not slots and any(k in q for k in ["eat", "ate", "food", "meal", "diet"]):
-        slots.append("general_meal")
-
-    time_ref = "unspecified"
-    if any(k in q for k in ["yesterday", "last night", "past day", "previous day", "last evening"]):
-        time_ref = "previous_day"
-    elif any(k in q for k in ["today", "this morning", "this afternoon", "earlier today", "morning"]):
-        time_ref = "today"
-    elif any(k in q for k in ["tomorrow"]):
-        time_ref = "future"
-
-    return slots, time_ref
 
 
 # Global singleton instance of MedicalIntentClassifier
@@ -209,6 +189,16 @@ class QuestionClassifier:
             MedicalIntent.MEDICATION_ADHERENCE: IntentCategory.MEDICATION_ADHERENCE,
             MedicalIntent.MEDICATION_STATEMENT: IntentCategory.MEDICATION_STATEMENT,
             MedicalIntent.MEDICATION_NAME_FRAGMENT: IntentCategory.MEDICATION_NAME_FRAGMENT,
+            MedicalIntent.MEDICATION_NAME_QUERY: IntentCategory.MEDICATION_NAME_QUERY,
+            MedicalIntent.MEDICATION_PURPOSE_QUERY: IntentCategory.MEDICATION_PURPOSE_QUERY,
+            MedicalIntent.MEDICATION_EFFECT_QUERY: IntentCategory.MEDICATION_EFFECT_QUERY,
+            MedicalIntent.MEDICATION_DOSAGE_QUERY: IntentCategory.MEDICATION_DOSAGE_QUERY,
+            MedicalIntent.MEDICATION_FREQUENCY_QUERY: IntentCategory.MEDICATION_FREQUENCY_QUERY,
+            MedicalIntent.MEDICATION_ROUTE_QUERY: IntentCategory.MEDICATION_ROUTE_QUERY,
+            MedicalIntent.MEDICATION_SIDE_EFFECT_QUERY: IntentCategory.MEDICATION_SIDE_EFFECT_QUERY,
+            MedicalIntent.MEDICATION_ALLERGY_QUERY: IntentCategory.MEDICATION_ALLERGY_QUERY,
+            MedicalIntent.MEDICATION_DURATION_QUERY: IntentCategory.MEDICATION_DURATION_QUERY,
+            MedicalIntent.MEDICATION_UNKNOWN: IntentCategory.MEDICATION_UNKNOWN,
             MedicalIntent.DIET_HISTORY: IntentCategory.SOCIAL_HISTORY,
             MedicalIntent.ONSET_TIMING: IntentCategory.ONSET_TIMING,
             MedicalIntent.ONSET_ACTIVITY: IntentCategory.ONSET_ACTIVITY,
@@ -252,6 +242,24 @@ class QuestionClassifier:
         elif nlu_res.intent == MedicalIntent.MEDICATION_ADHERENCE:
             subconcept = "medication_adherence"
             slots = ["medication_adherence"]
+        elif nlu_res.intent == MedicalIntent.MEDICATION_PURPOSE_QUERY:
+            subconcept = "medication_purpose"
+            slots = ["medication_purpose"]
+        elif nlu_res.intent == MedicalIntent.MEDICATION_DOSAGE_QUERY:
+            subconcept = "medication_dosage"
+            slots = ["medication_dosage"]
+        elif nlu_res.intent == MedicalIntent.MEDICATION_FREQUENCY_QUERY:
+            subconcept = "medication_frequency"
+            slots = ["medication_frequency"]
+        elif nlu_res.intent == MedicalIntent.MEDICATION_ROUTE_QUERY:
+            subconcept = "medication_route_form"
+            slots = ["medication_route_form"]
+        elif nlu_res.intent == MedicalIntent.MEDICATION_SIDE_EFFECT_QUERY:
+            subconcept = "medication_side_effects"
+            slots = ["medication_side_effects"]
+        elif nlu_res.intent == MedicalIntent.MEDICATION_ALLERGY_QUERY:
+            subconcept = "drug_allergies"
+            slots = ["drug_allergies"]
         elif nlu_res.intent == MedicalIntent.DIET_HISTORY:
             subconcept = "diet_history"
             slots = [nlu_res.slot] if nlu_res.slot else ["general_meal"]
@@ -292,7 +300,9 @@ class QuestionClassifier:
             referenced_topic=nlu_res.referenced_topic,
             referenced_slot=nlu_res.referenced_slot,
             entities=nlu_res.entities,
+            extracted_medication=nlu_res.extracted_medication,
             confidence=nlu_res.confidence,
             topic=nlu_res.topic,
-            slot=nlu_res.slot
+            slot=nlu_res.slot,
+            negated=nlu_res.negated
         )

@@ -150,6 +150,16 @@ class AIOrchestrator:
             IntentCategory.MANAGEMENT_STATEMENT,
             IntentCategory.MEDICATION_STATEMENT,
             IntentCategory.MEDICATION_NAME_FRAGMENT,
+            IntentCategory.MEDICATION_NAME_QUERY,
+            IntentCategory.MEDICATION_PURPOSE_QUERY,
+            IntentCategory.MEDICATION_EFFECT_QUERY,
+            IntentCategory.MEDICATION_DOSAGE_QUERY,
+            IntentCategory.MEDICATION_FREQUENCY_QUERY,
+            IntentCategory.MEDICATION_ROUTE_QUERY,
+            IntentCategory.MEDICATION_SIDE_EFFECT_QUERY,
+            IntentCategory.MEDICATION_ALLERGY_QUERY,
+            IntentCategory.MEDICATION_DURATION_QUERY,
+            IntentCategory.MEDICATION_UNKNOWN,
             IntentCategory.DIAGNOSIS_STATEMENT,
             IntentCategory.DIAGNOSIS_REQUEST,
             IntentCategory.EMPATHY,
@@ -333,7 +343,8 @@ class AIOrchestrator:
                 "last_topic": session_state.last_topic,
                 "last_slot": session_state.last_slot,
                 "last_time_reference": session_state.last_time_reference,
-                "last_patient_fact_state": fact.state.value
+                "last_patient_fact_state": fact.state.value,
+                "medications": [sm.to_dict() for sm in session_state.structured_medications]
             }
         }
 

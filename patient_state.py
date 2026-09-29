@@ -12,7 +12,7 @@ patient_state
 ├── radiation
 ├── associated_symptoms
 ├── past_medical_history
-├── medications
+├── medications (raw strings & structured objects)
 ├── allergies
 ├── social_history
 ├── physical_findings
@@ -27,6 +27,8 @@ patient_state
 import re
 from enum import Enum
 from typing import Dict, Any, List, Set, Optional
+from dataclasses import dataclass, field
+from medical_nlu.medication_catalog import MedicationCatalog
 
 
 class FactState(str, Enum):
@@ -37,6 +39,104 @@ class FactState(str, Enum):
     UNKNOWN = "UNKNOWN"
     NOT_YET_REVEALED = "NOT_YET_REVEALED"
     REVEALED = "REVEALED"
+
+
+@dataclass
+class StructuredMedication:
+    raw_name: str
+    normalized_name: str
+    canonical_name: str
+    brand_name: Optional[str] = None
+    active_ingredients: List[str] = field(default_factory=list)
+    status: str = "active"  # active, stopped, as_needed, negated
+    dose: Optional[str] = None
+    unit: Optional[str] = None
+    frequency: Optional[str] = None
+    route: Optional[str] = "oral"
+    form: Optional[str] = "tablet"
+    adherence: Optional[str] = None
+    source: str = "CASE_FACT"  # CASE_FACT, CONVERSATION_REVEALED, PATIENT_STATEMENT, CLINICIAN_STATEMENT, EXAM, INVESTIGATION, EXTERNAL_TERMINOLOGY
+    negated: bool = False
+    time_reference: Optional[str] = None
+    reason: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "raw_name": self.raw_name,
+            "normalized_name": self.normalized_name,
+            "canonical_name": self.canonical_name,
+            "brand_name": self.brand_name,
+            "active_ingredients": self.active_ingredients,
+            "status": self.status,
+            "dose": self.dose,
+            "unit": self.unit,
+            "frequency": self.frequency,
+            "route": self.route,
+            "form": self.form,
+            "adherence": self.adherence,
+            "source": self.source,
+            "negated": self.negated,
+            "time_reference": self.time_reference,
+            "reason": self.reason
+        }
+
+
+def parse_raw_medication_string(med_str: str, source: str = "CASE_FACT") -> StructuredMedication:
+    """Parses a medication string into a StructuredMedication object."""
+    cleaned = med_str.strip()
+    adh = None
+
+    # Check parenthetical notes for adherence (e.g. "(admits to missing doses frequently)")
+    adh_match = re.search(r"\(([^)]+)\)", cleaned)
+    if adh_match:
+        note = adh_match.group(1).lower()
+        if "miss" in note or "skip" in note or "forget" in note:
+            adh = "missed_doses"
+        elif "regular" in note or "daily" in note:
+            adh = "regular"
+        cleaned_no_parens = re.sub(r"\s*\([^)]*\)", "", cleaned).strip()
+    else:
+        cleaned_no_parens = cleaned
+
+    catalog = MedicationCatalog.get_instance()
+
+    # Extract dose and unit
+    dose_match = re.search(r"(\d+(?:\.\d+)?)\s*(mg|mcg|g|ml|puffs?|drops?|tablets?|capsules?|units?)", cleaned_no_parens, re.IGNORECASE)
+    dose = dose_match.group(1) if dose_match else None
+    unit = dose_match.group(2).lower() if dose_match else None
+
+    # Extract frequency
+    freq_match = re.search(r"\b(daily|once\s+daily|twice\s+daily|three\s+times\s+daily|nightly|at\s+night|morning|every\s+morning|as\s+needed|prn|bid|tid|qid)\b", cleaned_no_parens, re.IGNORECASE)
+    freq = freq_match.group(0).lower() if freq_match else "daily"
+
+    # Extract raw name
+    name_part = re.split(r"\s+\d+", cleaned_no_parens)[0].strip()
+    if not name_part:
+        name_part = cleaned_no_parens
+
+    concept = catalog.lookup(name_part)
+    canonical = concept.canonical_name if concept else name_part.lower()
+    ingredients = concept.active_ingredients if concept else [canonical]
+    brand = name_part.title() if (concept and any(b.lower() == name_part.lower() for b in concept.brand_names)) else None
+    default_form = concept.dosage_forms[0] if (concept and concept.dosage_forms) else "tablet"
+    default_route = concept.default_routes[0] if (concept and concept.default_routes) else "oral"
+
+    return StructuredMedication(
+        raw_name=med_str,
+        normalized_name=canonical,
+        canonical_name=canonical,
+        brand_name=brand,
+        active_ingredients=ingredients,
+        status="active",
+        dose=dose,
+        unit=unit,
+        frequency=freq,
+        route=default_route,
+        form=default_form,
+        adherence=adh,
+        source=source,
+        negated=False
+    )
 
 
 class PatientSimulationState:
@@ -62,12 +162,13 @@ class PatientSimulationState:
         self.associated_symptoms: Dict[str, bool] = {}
         self.past_medical_history: List[str] = []
         self.medications: List[str] = []
+        self.structured_medications: List[StructuredMedication] = []
         self.allergies: List[str] = []
         self.social_history: Dict[str, Any] = {}
         self.family_history: str = ""
         self.physical_findings: Dict[str, Any] = {}
         self.investigations: Dict[str, Any] = {}
-        
+
         # Maps fact key/id -> authoritative statement previously stated by patient
         self.revealed_facts: Dict[str, str] = {}
         self.revealed_fact_ids: Set[str] = set()
@@ -211,12 +312,17 @@ class PatientSimulationState:
         elif isinstance(pmh, str) and pmh.strip():
             state.past_medical_history = [pmh.strip()]
 
-        # Medications
+        # Medications (Strings + Structured Objects)
         meds = case_data.get("medications") or facts.get("medications") or []
         if isinstance(meds, list):
             state.medications = [str(x) for x in meds]
         elif isinstance(meds, str) and meds.strip():
             state.medications = [meds.strip()]
+
+        state.structured_medications = [parse_raw_medication_string(m, source="CASE_FACT") for m in state.medications]
+
+        # Register in active catalog
+        MedicationCatalog.get_instance().register_case_medications(state.medications)
 
         # Allergies
         allergies = case_data.get("allergies") or facts.get("allergies") or []
@@ -238,13 +344,11 @@ class PatientSimulationState:
             state.revealed_facts["initial_statement"] = init_stmt
             lower_init = init_stmt.lower()
 
-            # If opening statement mentions elephant / heavy pressure on chest
             if "elephant" in lower_init or "pressure" in lower_init or "crushing" in lower_init or "chest" in lower_init:
                 char_stmt = "It feels like a heavy crushing pressure, almost like an elephant is sitting right in the middle of my chest."
                 state.record_disclosure("character", char_stmt)
                 state.record_disclosure("location", "Right in the middle of my chest.")
 
-            # If opening statement mentions dizzy / cold sweat
             if "dizzy" in lower_init or "dizziness" in lower_init:
                 state.associated_symptoms["dizziness"] = True
                 state.record_disclosure("associated_symptoms.dizziness", "Yes, I started feeling dizzy and lightheaded on my way in.")
@@ -277,6 +381,18 @@ class PatientSimulationState:
         """Retrieve the authoritative statement previously given for this fact."""
         return self.revealed_facts.get(fact_key)
 
+    def find_medication(self, query_name: str) -> Optional[StructuredMedication]:
+        """Looks up a medication in the patient's structured medications."""
+        q = query_name.lower().strip()
+        for sm in self.structured_medications:
+            if q in sm.canonical_name or q in sm.normalized_name or q in sm.raw_name.lower():
+                return sm
+            if any(q in ing for ing in sm.active_ingredients):
+                return sm
+            if sm.brand_name and q in sm.brand_name.lower():
+                return sm
+        return None
+
     def ingest_conversation_history(self, history: List[Dict[str, Any]]):
         """
         Synchronizes session state from the full conversation history.
@@ -297,26 +413,20 @@ class PatientSimulationState:
             elif sender in ["patient", "assistant"]:
                 self.last_patient_message = text
                 lower_text = text.lower()
-                # Track revealed character
                 if "elephant" in lower_text or "heavy" in lower_text or "squeezing" in lower_text or "crushing" in lower_text:
                     if "dizzy" in lower_text or "office" in lower_text:
                         self.record_disclosure("character", "It feels like a heavy crushing pressure, almost like an elephant is sitting right in the middle of my chest.")
                     else:
                         self.record_disclosure("character", text)
-                # Track revealed radiation
                 if "jaw" in lower_text or "arm" in lower_text or "shoulder" in lower_text or "back" in lower_text:
                     if "radiat" in lower_text or "spread" in lower_text or "shoot" in lower_text or "goes into" in lower_text:
                         self.record_disclosure("radiation", text)
-                # Track revealed onset
                 if "45 minutes" in lower_text or "minutes ago" in lower_text or "hour ago" in lower_text or "hours ago" in lower_text or "started about" in lower_text or "began about" in lower_text:
                     self.record_disclosure("onset_timing", text)
-                # Track severity
                 if "8 out of 10" in lower_text or "8/10" in lower_text or "severe" in lower_text or "about an 8" in lower_text:
                     self.record_disclosure("severity", text)
-                # Track medications
-                if "lisinopril" in lower_text or "atorvastatin" in lower_text or "aspirin" in lower_text or "inhaler" in lower_text:
+                if "amlodipine" in lower_text or "atorvastatin" in lower_text or "lisinopril" in lower_text or "aspirin" in lower_text or "inhaler" in lower_text:
                     self.record_disclosure("medications", text)
-                # Track allergies
                 if "allerg" in lower_text or "nkda" in lower_text:
                     self.record_disclosure("allergies", text)
 

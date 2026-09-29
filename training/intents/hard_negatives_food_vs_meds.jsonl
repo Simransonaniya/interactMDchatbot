@@ -1,0 +1,9 @@
+{"query_a": "did you eat breakfast", "intent_a": "DIET_HISTORY", "query_b": "did you eat medicine", "intent_b": "MEDICATION_HISTORY", "shared_verb": "eat"}
+{"query_a": "what did you eat for dinner", "intent_a": "DIET_HISTORY", "query_b": "what medicine did you take", "intent_b": "MEDICATION_HISTORY", "shared_verb": "eat/take"}
+{"query_a": "did you eat lunch", "intent_a": "DIET_HISTORY", "query_b": "did you eat medcian", "intent_b": "MEDICATION_HISTORY", "shared_verb": "eat"}
+{"query_a": "what did you eat", "intent_a": "DIET_HISTORY", "query_b": "what tablet do you take", "intent_b": "MEDICATION_HISTORY", "shared_verb": "what"}
+{"query_a": "are you taking breakfast", "intent_a": "DIET_HISTORY", "query_b": "are you taking medication", "intent_b": "MEDICATION_HISTORY", "shared_verb": "taking"}
+{"query_a": "had you breakfast", "intent_a": "DIET_HISTORY", "query_b": "had you medicine", "intent_b": "MEDICATION_HISTORY", "shared_verb": "had"}
+{"query_a": "did you have lunch today", "intent_a": "DIET_HISTORY", "query_b": "did you have your medicine today", "intent_b": "MEDICATION_ADHERENCE", "shared_verb": "have"}
+{"query_a": "what was you eat in your breakfast", "intent_a": "DIET_HISTORY", "query_b": "what was you eat in your medcian", "intent_b": "MEDICATION_HISTORY", "shared_verb": "eat"}
+{"query_a": "take breakfast and rest", "intent_a": "MANAGEMENT_STATEMENT", "query_b": "take paracetamol and rest", "intent_b": "MEDICATION_STATEMENT", "shared_verb": "take"}

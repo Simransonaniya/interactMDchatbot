@@ -1,7 +1,10 @@
 {
   "medicine": {
     "canonical": "medicine",
+    "display_name": "Medication",
     "class": "generic_term",
+    "active_ingredients": [],
+    "brand_names": [],
     "aliases": [
       "medicine",
       "medicines",
@@ -22,7 +25,8 @@
       "prescribed medication",
       "daily medication",
       "daily medicines",
-      "routine meds"
+      "routine meds",
+      "daily tablets"
     ],
     "common_misspellings": [
       "medcian",
@@ -43,82 +47,61 @@
       "medicationns",
       "tab",
       "tabs"
-    ]
-  },
-  "paracetamol": {
-    "canonical": "paracetamol",
-    "class": "analgesic_antipyretic",
-    "aliases": [
-      "paracetamol",
-      "paracetomol",
-      "paracetmol",
-      "paracetamol tablet",
-      "paracetamol tablets",
-      "acetaminophen",
-      "tylenol",
-      "panadol",
-      "crocin",
-      "dolo",
-      "dolo 650",
-      "dolo650",
-      "calpol",
-      "combiflam"
     ],
-    "common_misspellings": [
-      "paracetomol",
-      "paracetmol",
-      "paracitamol",
-      "paracetemol"
-    ]
-  },
-  "nicip plus": {
-    "canonical": "nicip plus",
-    "class": "nsaid_combination",
-    "aliases": [
-      "nicip plus",
-      "nicip",
-      "niciplus",
-      "nicip-plus",
-      "nishchit",
-      "nishchit plus",
-      "nimesulide",
-      "nimesulide paracetamol"
-    ],
-    "common_misspellings": [
-      "niciplus",
-      "nicip-plus",
-      "nishchit plus",
-      "nishchit"
-    ]
+    "dosage_forms": ["tablet", "capsule", "pill"],
+    "default_routes": ["oral"],
+    "common_strengths": [],
+    "indications_purpose": "general medical therapy",
+    "common_side_effects": []
   },
   "amlodipine": {
     "canonical": "amlodipine",
+    "display_name": "Amlodipine",
     "class": "calcium_channel_blocker",
+    "active_ingredients": ["amlodipine"],
+    "brand_names": ["Norvasc", "Amlong", "Istin", "Katerzia"],
     "aliases": [
       "amlodipine",
       "amlodipin",
       "norvasc",
       "amlodipine 5mg",
       "amlodipine 5 mg",
+      "amlodipine 10mg",
+      "amlodipine 10 mg",
+      "amlodipine 2.5mg",
       "amlodipine besylate",
-      "amlong"
+      "amlong",
+      "istin"
     ],
     "common_misspellings": [
       "amlodipin",
       "amlodepine",
       "amlodopine",
-      "amladipine"
-    ]
+      "amladipine",
+      "amlodipinee",
+      "amlodpine"
+    ],
+    "dosage_forms": ["tablet", "suspension"],
+    "default_routes": ["oral"],
+    "common_strengths": ["2.5 mg", "5 mg", "10 mg"],
+    "indications_purpose": "treating high blood pressure (hypertension) and coronary artery disease or chest pain (angina)",
+    "common_side_effects": ["swelling of ankles or feet (edema)", "dizziness", "flushing", "headache", "fatigue"]
   },
   "atorvastatin": {
     "canonical": "atorvastatin",
-    "class": "statin",
+    "display_name": "Atorvastatin",
+    "class": "hmg_coa_reductase_inhibitor_statin",
+    "active_ingredients": ["atorvastatin"],
+    "brand_names": ["Lipitor", "Atorva", "Atorlip", "Torvast", "Sortis"],
     "aliases": [
       "atorvastatin",
       "atorva",
       "lipitor",
+      "atorvastatin 10mg",
       "atorvastatin 20mg",
       "atorvastatin 20 mg",
+      "atorvastatin 40mg",
+      "atorvastatin 80mg",
       "atorlip",
       "atorvastatin calcium",
       "statin",
@@ -127,30 +110,167 @@
     "common_misspellings": [
       "atorvastin",
       "atorvastatine",
-      "atrovastatin"
-    ]
+      "atrovastatin",
+      "atorvastatinn",
+      "atorvastatn",
+      "atorvostatin"
+    ],
+    "dosage_forms": ["tablet"],
+    "default_routes": ["oral"],
+    "common_strengths": ["10 mg", "20 mg", "40 mg", "80 mg"],
+    "indications_purpose": "lowering LDL cholesterol and triglycerides and reducing the risk of heart attacks and stroke",
+    "common_side_effects": ["muscle aches (myalgia)", "joint pain", "nausea", "headache", "diarrhea"]
+  },
+  "paracetamol": {
+    "canonical": "paracetamol",
+    "display_name": "Paracetamol",
+    "class": "analgesic_antipyretic",
+    "active_ingredients": ["paracetamol"],
+    "brand_names": ["Tylenol", "Panadol", "Crocin", "Dolo 650", "Calpol"],
+    "aliases": [
+      "paracetamol",
+      "paracetomol",
+      "paracetmol",
+      "paracetamol tablet",
+      "paracetamol tablets",
+      "acetaminophen",
+      "apap",
+      "tylenol",
+      "panadol",
+      "crocin",
+      "dolo",
+      "dolo 650",
+      "dolo650",
+      "calpol"
+    ],
+    "common_misspellings": [
+      "paracetomol",
+      "paracetmol",
+      "paracitamol",
+      "paracetemol",
+      "paracetamolll",
+      "acetominophen",
+      "tylenolll"
+    ],
+    "dosage_forms": ["tablet", "syrup", "suppository", "injection"],
+    "default_routes": ["oral", "intravenous", "rectal"],
+    "common_strengths": ["325 mg", "500 mg", "650 mg", "1000 mg"],
+    "indications_purpose": "relieving mild to moderate pain and reducing fever",
+    "common_side_effects": ["nausea", "rash", "liver toxicity in excessive doses"]
+  },
+  "nicip plus": {
+    "canonical": "nicip plus",
+    "display_name": "Nicip Plus",
+    "class": "combination_analgesic_nsaid",
+    "active_ingredients": ["nimesulide", "paracetamol"],
+    "brand_names": ["Nicip Plus", "Nicip-Plus"],
+    "aliases": [
+      "nicip plus",
+      "nicip",
+      "niciplus",
+      "nicip-plus",
+      "nishchit",
+      "nishchit plus",
+      "nimesulide",
+      "nimesulide paracetamol",
+      "nimesulide and paracetamol"
+    ],
+    "common_misspellings": [
+      "niciplus",
+      "nicip-plus",
+      "nishchit plus",
+      "nishchit",
+      "nisiplus"
+    ],
+    "dosage_forms": ["tablet"],
+    "default_routes": ["oral"],
+    "common_strengths": ["100 mg / 325 mg", "100 mg / 500 mg"],
+    "indications_purpose": "relieving acute painful inflammatory conditions and fever",
+    "common_side_effects": ["gastric irritation", "nausea", "dizziness", "heartburn"]
+  },
+  "caduet": {
+    "canonical": "amlodipine + atorvastatin",
+    "display_name": "Caduet (Amlodipine + Atorvastatin)",
+    "class": "combination_cardiovascular",
+    "active_ingredients": ["amlodipine", "atorvastatin"],
+    "brand_names": ["Caduet", "Amlopres-AT"],
+    "aliases": [
+      "caduet",
+      "amlodipine and atorvastatin",
+      "amlodipine + atorvastatin",
+      "amlodipine atorvastatin",
+      "amlodipine plus atorvastatin"
+    ],
+    "common_misspellings": [
+      "caduit",
+      "caduett"
+    ],
+    "dosage_forms": ["tablet"],
+    "default_routes": ["oral"],
+    "common_strengths": ["5 mg / 10 mg", "5 mg / 20 mg", "10 mg / 20 mg"],
+    "indications_purpose": "treating high blood pressure and lowering cholesterol simultaneously to prevent cardiovascular events",
+    "common_side_effects": ["peripheral edema", "muscle aches", "dizziness", "headache"]
+  },
+  "combiflam": {
+    "canonical": "ibuprofen + paracetamol",
+    "display_name": "Combiflam (Ibuprofen + Paracetamol)",
+    "class": "combination_analgesic_nsaid",
+    "active_ingredients": ["ibuprofen", "paracetamol"],
+    "brand_names": ["Combiflam", "Flexon", "Ibugesic Plus"],
+    "aliases": [
+      "combiflam",
+      "ibuprofen and paracetamol",
+      "ibuprofen + paracetamol",
+      "flexon",
+      "ibugesic plus"
+    ],
+    "common_misspellings": [
+      "combiflan",
+      "combiflem"
+    ],
+    "dosage_forms": ["tablet", "syrup"],
+    "default_routes": ["oral"],
+    "common_strengths": ["400 mg / 325 mg"],
+    "indications_purpose": "relieving moderate to severe inflammatory pain and fever",
+    "common_side_effects": ["stomach upset", "heartburn", "nausea", "dizziness"]
   },
   "aspirin": {
     "canonical": "aspirin",
-    "class": "antiplatelet",
+    "display_name": "Aspirin",
+    "class": "antiplatelet_nsaid",
+    "active_ingredients": ["aspirin"],
+    "brand_names": ["Bayer", "Ecosprin", "Disprin", "Bufferin"],
     "aliases": [
       "aspirin",
       "asprin",
       "ecosprin",
+      "ecosprin 75",
+      "ecosprin 150",
       "disprin",
       "bayer aspirin",
+      "baby aspirin",
+      "low dose aspirin",
       "acetylsalicylic acid",
       "asa"
     ],
     "common_misspellings": [
       "asprin",
       "aspirine",
-      "asprin tablet"
-    ]
+      "asprin tablet",
+      "aspiran"
+    ],
+    "dosage_forms": ["tablet", "chewable tablet", "enteric coated tablet"],
+    "default_routes": ["oral"],
+    "common_strengths": ["75 mg", "81 mg", "150 mg", "300 mg", "325 mg"],
+    "indications_purpose": "inhibiting platelet aggregation to prevent and treat blood clots in acute coronary syndromes and stroke",
+    "common_side_effects": ["gastric irritation", "dyspepsia", "increased bleeding risk", "easy bruising"]
   },
   "nitroglycerin": {
     "canonical": "nitroglycerin",
-    "class": "nitrate",
+    "display_name": "Nitroglycerin",
+    "class": "nitrate_vasodilator",
+    "active_ingredients": ["nitroglycerin"],
+    "brand_names": ["Nitrostat", "Nitrolingual", "Nitro-Dur", "Sorbitrate", "Angised"],
     "aliases": [
       "nitroglycerin",
       "nitro",
@@ -159,169 +279,314 @@
       "sorbitrate",
       "gtn",
       "nitrostat",
-      "isosorbide"
+      "glyceryl trinitrate",
+      "isosorbide",
+      "isosorbide dinitrate",
+      "isosorbide mononitrate",
+      "imdur"
     ],
     "common_misspellings": [
       "nitroglycerine",
       "nitro glycerin",
-      "nitroglyserin"
-    ]
-  },
-  "sertraline": {
-    "canonical": "sertraline",
-    "class": "ssri",
-    "aliases": [
-      "sertraline",
-      "sertrakine",
-      "zoloft",
-      "sertra",
-      "sertraline 50mg"
+      "nitroglyserin",
+      "nitoglycerin"
     ],
-    "common_misspellings": [
-      "sertrakine",
-      "setraline",
-      "sertralin"
-    ]
+    "dosage_forms": ["sublingual tablet", "sublingual spray", "transdermal patch", "iv infusion"],
+    "default_routes": ["sublingual", "transdermal", "intravenous"],
+    "common_strengths": ["0.4 mg", "0.3 mg", "0.6 mg", "5 mg/hr patch"],
+    "indications_purpose": "vasodilating coronary arteries and systemic veins to relieve acute angina and myocardial ischemia",
+    "common_side_effects": ["throbbing headache", "hypotension", "dizziness", "reflex tachycardia", "flushing"]
   },
-  "escitalopram": {
-    "canonical": "escitalopram",
-    "class": "ssri",
+  "albuterol": {
+    "canonical": "albuterol",
+    "display_name": "Albuterol / Salbutamol",
+    "class": "short_acting_beta2_agonist_bronchodilator",
+    "active_ingredients": ["albuterol"],
+    "brand_names": ["Ventolin", "ProAir", "Proventil", "Asthalin"],
     "aliases": [
-      "escitalopram",
-      "escita;pram",
-      "lexapro",
-      "cipralex",
-      "nexito"
-    ],
-    "common_misspellings": [
-      "escita;pram",
-      "escitalopramm",
-      "escitalpram"
-    ]
-  },
-  "inhaler": {
-    "canonical": "inhaler",
-    "class": "bronchodilator",
-    "aliases": [
+      "albuterol",
+      "salbutamol",
+      "ventolin",
+      "proair",
+      "proventil",
+      "asthalin",
       "inhaler",
       "blue inhaler",
-      "salbutamol",
-      "albuterol",
-      "ventolin",
+      "rescue inhaler",
       "puffer",
       "asthma pump",
       "asthma inhaler"
     ],
     "common_misspellings": [
+      "albuteral",
+      "salbutemol",
+      "albutral",
       "inhailer",
       "inhealer"
-    ]
+    ],
+    "dosage_forms": ["metered dose inhaler (mdi)", "nebulizer solution", "tablet", "syrup"],
+    "default_routes": ["inhalation", "oral"],
+    "common_strengths": ["90 mcg/actuation", "108 mcg/actuation", "2.5 mg/3ml neb"],
+    "indications_purpose": "relaxing bronchial smooth muscle to relieve acute bronchospasm, shortness of breath, and wheezing in asthma and COPD",
+    "common_side_effects": ["tremor", "nervousness", "palpitations / tachycardia", "headache", "throat irritation"]
+  },
+  "sertraline": {
+    "canonical": "sertraline",
+    "display_name": "Sertraline",
+    "class": "ssri_antidepressant",
+    "active_ingredients": ["sertraline"],
+    "brand_names": ["Zoloft", "Sertra", "Daxid", "Lustral"],
+    "aliases": [
+      "sertraline",
+      "sertrakine",
+      "zoloft",
+      "sertra",
+      "sertraline 25mg",
+      "sertraline 50mg",
+      "sertraline 100mg"
+    ],
+    "common_misspellings": [
+      "sertrakine",
+      "setraline",
+      "sertralin",
+      "sertralinee",
+      "zertraline"
+    ],
+    "dosage_forms": ["tablet", "oral solution"],
+    "default_routes": ["oral"],
+    "common_strengths": ["25 mg", "50 mg", "100 mg"],
+    "indications_purpose": "treating major depressive disorder, panic disorder, obsessive-compulsive disorder, and generalized anxiety",
+    "common_side_effects": ["nausea", "insomnia", "diarrhea", "sexual dysfunction", "dry mouth", "drowsiness"]
+  },
+  "escitalopram": {
+    "canonical": "escitalopram",
+    "display_name": "Escitalopram",
+    "class": "ssri_antidepressant",
+    "active_ingredients": ["escitalopram"],
+    "brand_names": ["Lexapro", "Cipralex", "Nexito", "Cilentra"],
+    "aliases": [
+      "escitalopram",
+      "escita;pram",
+      "lexapro",
+      "cipralex",
+      "nexito",
+      "escitalopram 10mg",
+      "escitalopram 20mg"
+    ],
+    "common_misspellings": [
+      "escita;pram",
+      "escitalopramm",
+      "escitalpram",
+      "escitapram",
+      "esctitalopram"
+    ],
+    "dosage_forms": ["tablet", "oral solution"],
+    "default_routes": ["oral"],
+    "common_strengths": ["5 mg", "10 mg", "20 mg"],
+    "indications_purpose": "treating major depressive disorder and generalized anxiety disorder",
+    "common_side_effects": ["nausea", "headache", "insomnia", "fatigue", "ejaculatory disorder", "sweating"]
   },
   "metoprolol": {
     "canonical": "metoprolol",
-    "class": "beta_blocker",
+    "display_name": "Metoprolol",
+    "class": "beta_1_selective_blocker",
+    "active_ingredients": ["metoprolol"],
+    "brand_names": ["Lopressor", "Toprol-XL", "Betaloc"],
     "aliases": [
       "metoprolol",
+      "metoprolol succinate",
+      "metoprolol tartrate",
       "lopressor",
       "toprol",
+      "toprol xl",
       "beta blocker",
       "betaloc"
     ],
     "common_misspellings": [
       "metoprol",
-      "metaprolol"
-    ]
+      "metaprolol",
+      "metoprololl"
+    ],
+    "dosage_forms": ["tablet", "extended release tablet", "injection"],
+    "default_routes": ["oral", "intravenous"],
+    "common_strengths": ["25 mg", "50 mg", "100 mg", "200 mg"],
+    "indications_purpose": "lowering heart rate and blood pressure, reducing myocardial oxygen demand in angina, heart failure, and post-MI management",
+    "common_side_effects": ["bradycardia", "fatigue", "dizziness", "hypotension", "cold extremities"]
   },
   "lisinopril": {
     "canonical": "lisinopril",
+    "display_name": "Lisinopril",
     "class": "ace_inhibitor",
+    "active_ingredients": ["lisinopril"],
+    "brand_names": ["Prinivil", "Zestril", "Qbrelis"],
     "aliases": [
       "lisinopril",
       "zestril",
       "prinivil",
-      "ace inhibitor"
+      "ace inhibitor",
+      "lisinopril 10mg",
+      "lisinopril 20mg"
     ],
     "common_misspellings": [
       "lisinoprol",
-      "lizinopril"
-    ]
+      "lizinopril",
+      "lisinopriln"
+    ],
+    "dosage_forms": ["tablet", "oral solution"],
+    "default_routes": ["oral"],
+    "common_strengths": ["2.5 mg", "5 mg", "10 mg", "20 mg", "40 mg"],
+    "indications_purpose": "treating hypertension, heart failure, and improving survival following myocardial infarction",
+    "common_side_effects": ["dry cough", "dizziness", "hyperkalemia", "hypotension", "angioedema"]
   },
-  "ibuprofen": {
-    "canonical": "ibuprofen",
-    "class": "nsaid",
+  "clopidogrel": {
+    "canonical": "clopidogrel",
+    "display_name": "Clopidogrel",
+    "class": "p2y12_platelet_inhibitor",
+    "active_ingredients": ["clopidogrel"],
+    "brand_names": ["Plavix", "Deplatt", "Clopilet"],
     "aliases": [
-      "ibuprofen",
-      "advil",
-      "motrin",
-      "brufen"
+      "clopidogrel",
+      "plavix",
+      "clopilet",
+      "deplatt",
+      "clopidogrel 75mg"
     ],
     "common_misspellings": [
-      "ibuprofin",
-      "ibrufen"
-    ]
+      "clopidogrel",
+      "clopidogel",
+      "clopidogril"
+    ],
+    "dosage_forms": ["tablet"],
+    "default_routes": ["oral"],
+    "common_strengths": ["75 mg", "300 mg (loading)", "600 mg (loading)"],
+    "indications_purpose": "preventing atherothrombotic events in acute coronary syndrome, stenting, and ischemic stroke",
+    "common_side_effects": ["bleeding", "bruising", "purpura", "epistaxis", "gastrointestinal hemorrhage"]
   },
   "heparin": {
     "canonical": "heparin",
+    "display_name": "Heparin",
     "class": "anticoagulant",
+    "active_ingredients": ["heparin"],
+    "brand_names": ["Lovenox", "Clexane", "Fragmin", "Arixtra"],
     "aliases": [
       "heparin",
+      "unfractionated heparin",
+      "ufh",
+      "low molecular weight heparin",
+      "lmwh",
       "enoxaparin",
       "lovenox",
+      "clexane",
       "blood thinner"
     ],
     "common_misspellings": [
       "heparine",
-      "heparinn"
-    ]
+      "heparinn",
+      "enoxaparan"
+    ],
+    "dosage_forms": ["injection (vial/ampoule)", "pre-filled syringe"],
+    "default_routes": ["intravenous", "subcutaneous"],
+    "common_strengths": ["1000 units/ml", "5000 units/ml", "40 mg/0.4ml", "60 mg/0.6ml"],
+    "indications_purpose": "preventing and treating blood clots in acute myocardial infarction, pulmonary embolism, and DVT",
+    "common_side_effects": ["bleeding", "heparin-induced thrombocytopenia (HIT)", "injection site hematoma"]
   },
   "morphine": {
     "canonical": "morphine",
-    "class": "opioid",
+    "display_name": "Morphine",
+    "class": "opioid_analgesic",
+    "active_ingredients": ["morphine"],
+    "brand_names": ["MS Contin", "Kadian", "Roxanol"],
     "aliases": [
       "morphine",
-      "morphine sulfate"
+      "morphine sulfate",
+      "iv morphine",
+      "ms contin"
     ],
     "common_misspellings": [
       "morphene",
-      "morphin"
-    ]
-  },
-  "clopidogrel": {
-    "canonical": "clopidogrel",
-    "class": "antiplatelet",
-    "aliases": [
-      "clopidogrel",
-      "plavix"
+      "morphin",
+      "morphinee"
     ],
-    "common_misspellings": [
-      "clopidogrel",
-      "clopidogel"
-    ]
+    "dosage_forms": ["injection", "oral solution", "extended release tablet"],
+    "default_routes": ["intravenous", "subcutaneous", "oral"],
+    "common_strengths": ["2 mg/ml", "4 mg/ml", "10 mg/ml", "15 mg", "30 mg"],
+    "indications_purpose": "relieving severe acute pain including refractory ischemic chest pain in acute myocardial infarction and acute pulmonary edema",
+    "common_side_effects": ["respiratory depression", "hypotension", "sedation", "nausea", "vomiting", "constipation"]
   },
   "pantoprazole": {
     "canonical": "pantoprazole",
-    "class": "ppi",
+    "display_name": "Pantoprazole",
+    "class": "proton_pump_inhibitor",
+    "active_ingredients": ["pantoprazole"],
+    "brand_names": ["Protonix", "Pantocid", "Pan 40", "Pan D"],
     "aliases": [
       "pantoprazole",
       "pantocid",
       "pan 40",
       "pan d",
-      "protonix"
+      "protonix",
+      "pantoprazole 40mg"
     ],
     "common_misspellings": [
-      "pantoprazol"
-    ]
+      "pantoprazol",
+      "pantoprazolee",
+      "pan40"
+    ],
+    "dosage_forms": ["delayed release tablet", "iv injection"],
+    "default_routes": ["oral", "intravenous"],
+    "common_strengths": ["20 mg", "40 mg"],
+    "indications_purpose": "reducing gastric acid production for treating GERD, peptic ulcers, and providing GI prophylaxis",
+    "common_side_effects": ["headache", "diarrhea", "nausea", "abdominal pain"]
   },
   "omeprazole": {
     "canonical": "omeprazole",
-    "class": "ppi",
+    "display_name": "Omeprazole",
+    "class": "proton_pump_inhibitor",
+    "active_ingredients": ["omeprazole"],
+    "brand_names": ["Prilosec", "Omez", "Losec"],
     "aliases": [
       "omeprazole",
       "prilosec",
-      "omez"
+      "omez",
+      "omeprazole 20mg"
     ],
     "common_misspellings": [
-      "omeprazol"
-    ]
+      "omeprazol",
+      "omiprazole"
+    ],
+    "dosage_forms": ["delayed release capsule", "tablet"],
+    "default_routes": ["oral"],
+    "common_strengths": ["10 mg", "20 mg", "40 mg"],
+    "indications_purpose": "suppressing gastric acid for heartburn, GERD, and gastric erosions",
+    "common_side_effects": ["headache", "nausea", "diarrhea", "flatulence"]
+  },
+  "ibuprofen": {
+    "canonical": "ibuprofen",
+    "display_name": "Ibuprofen",
+    "class": "nsaid_analgesic",
+    "active_ingredients": ["ibuprofen"],
+    "brand_names": ["Advil", "Motrin", "Brufen", "Nurofen"],
+    "aliases": [
+      "ibuprofen",
+      "advil",
+      "motrin",
+      "brufen",
+      "nurofen",
+      "ibuprofen 200mg",
+      "ibuprofen 400mg",
+      "ibuprofen 600mg",
+      "ibuprofen 800mg"
+    ],
+    "common_misspellings": [
+      "ibuprofin",
+      "ibrufen",
+      "ibuprofren",
+      "ibuprefen"
+    ],
+    "dosage_forms": ["tablet", "capsule", "oral suspension"],
+    "default_routes": ["oral"],
+    "common_strengths": ["200 mg", "400 mg", "600 mg", "800 mg"],
+    "indications_purpose": "relieving inflammatory pain, fever, and musculoskeletal discomfort",
+    "common_side_effects": ["dyspepsia", "gastric ulcers", "renal impairment", "increased cardiovascular risk"]
   }
 }
