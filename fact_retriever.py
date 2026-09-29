@@ -51,10 +51,10 @@ class FactRetriever:
         patient = case_data.get("patient", {}) if isinstance(case_data.get("patient"), dict) else {}
         facts = case_data.get("facts", {}) if isinstance(case_data.get("facts"), dict) else {}
         pmh = case_data.get("past_medical_history") or history.get("past_medical_history") or facts.get("pastMedicalHistory") or []
-        meds = case_data.get("medications") or facts.get("medications") or []
-        allergies = case_data.get("allergies") or facts.get("allergies") or []
-        family_history = case_data.get("family_history") or facts.get("familyHistory") or ""
-        social_history = case_data.get("social_history") or facts.get("socialHistory") or ""
+        meds = case_data.get("medications") or history.get("medications") or facts.get("medications") or []
+        allergies = case_data.get("allergies") or history.get("allergies") or facts.get("allergies") or []
+        family_history = case_data.get("family_history") or history.get("family_history") or facts.get("familyHistory") or ""
+        social_history = case_data.get("social_history") or history.get("social_history") or facts.get("socialHistory") or ""
 
         gender = str(patient.get("gender") or patient.get("sex") or case_data.get("patient_gender") or "").strip().lower()
         is_male = gender in ["male", "m", "man"]
@@ -294,10 +294,19 @@ class FactRetriever:
             )
 
         # ---------------------------------------------------------
-        # 5. MANAGEMENT STATEMENT ("You should take rest", "Sit down", "We will monitor you")
+        # 5. MANAGEMENT STATEMENT & MANAGEMENT INSTRUCTION ("deep breath relaxation", "Take rest", "Sit down")
         # ---------------------------------------------------------
-        if intent.category == IntentCategory.MANAGEMENT_STATEMENT:
-            stmt = "Okay doctor, I'll sit down and rest. Is that going to help ease this pressure in my chest?"
+        if intent.category in [IntentCategory.MANAGEMENT_INSTRUCTION, IntentCategory.MANAGEMENT_STATEMENT]:
+            query_lower = intent.raw_query.lower()
+            if any(k in query_lower for k in ["deep breath", "breath", "breathing", "relax", "relaxation", "calm"]):
+                stmt = "I'll try to take deep breaths and relax for a few minutes, doctor. Is that going to help ease this pressure in my chest?"
+            elif any(k in query_lower for k in ["sit", "lie", "rest", "stop moving"]):
+                stmt = "Okay doctor, I'll sit down and rest. Is that going to help ease this pressure in my chest?"
+            elif any(k in query_lower for k in ["monitor", "observation", "observe", "check on you"]):
+                stmt = "Okay doctor, I understand you want to monitor me. Please do whatever you need to help with this pain."
+            else:
+                stmt = "Okay doctor, I'll follow your instructions. Will that help ease this crushing pressure in my chest?"
+
             return RetrievedFact(
                 fact_id="management_statement_ack",
                 state=FactState.AVAILABLE,
@@ -310,13 +319,73 @@ class FactRetriever:
             )
 
         # ---------------------------------------------------------
-        # 6. MEDICATION STATEMENT & MEDICATION NAME FRAGMENTS ("niciplus", "paracetomol tablet", "take tablet")
+        # 5b. LIFESTYLE MANAGEMENT ADVICE ("regular meals and sleep reduce caffeine energy drink and lightweight or exercise")
+        # ---------------------------------------------------------
+        if intent.category == IntentCategory.LIFESTYLE_MANAGEMENT:
+            stmt = "I understand, doctor. I'll make sure to cut down on caffeine and energy drinks, get regular meals and sleep, and do light exercise once this severe chest pain is taken care of."
+            return RetrievedFact(
+                fact_id="lifestyle_management_ack",
+                state=FactState.AVAILABLE,
+                truth_value=True,
+                permitted_statement=stmt,
+                is_controlled_shield=True,
+                category="Management",
+                response_source="LIFESTYLE_MANAGEMENT",
+                fact_key="lifestyle_management"
+            )
+
+        # ---------------------------------------------------------
+        # 5c. CLINICAL CLAIM & CLINICAL INTERPRETATION ("you take high volume of medicine that's why you get anxiety", "maybe you take your medicine with empty stomach")
+        # ---------------------------------------------------------
+        if intent.category in [IntentCategory.CLINICAL_CLAIM, IntentCategory.CLINICAL_INTERPRETATION]:
+            query_lower = intent.raw_query.lower()
+            if any(k in query_lower for k in ["high volume", "too much medicine", "too many pills", "that's why you get", "causes anxiety", "causing anxiety"]):
+                stmt = "I only take the daily medications my doctor prescribed for my blood pressure and cholesterol, doctor. I don't know if they could cause anxiety, but this crushing chest pressure and dizziness feels very real and frightening."
+            elif any(k in query_lower for k in ["empty stomach", "without food", "without breakfast"]):
+                stmt = "I usually just take my morning pills with water, doctor. With everything that happened this morning and this intense chest pain, I don't really remember if I had breakfast or took them on an empty stomach."
+            else:
+                stmt = "I'm not sure if that's what's causing it, doctor. I just know this heavy crushing pressure and dizziness started suddenly about 45 minutes ago."
+
+            return RetrievedFact(
+                fact_id="clinical_claim_reaction",
+                state=FactState.AVAILABLE,
+                truth_value=True,
+                permitted_statement=stmt,
+                is_controlled_shield=True,
+                category="General",
+                response_source="CLINICIAN_CLAIM",
+                fact_key="clinical_claim"
+            )
+
+        # ---------------------------------------------------------
+        # 5d. CONTEXTUAL HISTORY QUESTION (e.g. "before taking the medicine had you breakfast", "did you eat before taking the tablet")
+        # ---------------------------------------------------------
+        if intent.category == IntentCategory.CONTEXTUAL_HISTORY_QUESTION:
+            query_lower = intent.raw_query.lower()
+            if any(k in query_lower for k in ["breakfast", "food", "eat", "meal", "stomach"]) and any(k in query_lower for k in ["medicine", "medication", "pill", "tablet", "dose"]):
+                stmt = "I take my daily morning medications with water, but I was in such a rush to get into the office that I don't recall having breakfast before taking them this time."
+            else:
+                stmt = "I usually take my morning medications with some water, but with the rush to get into work and this sudden chest pain, my routine was completely thrown off."
+
+            return RetrievedFact(
+                fact_id="contextual_medication_diet",
+                state=FactState.AVAILABLE,
+                truth_value=True,
+                permitted_statement=stmt,
+                is_controlled_shield=True,
+                category="Meds",
+                response_source="CASE_FACT",
+                fact_key="medication_contextual_timing"
+            )
+
+        # ---------------------------------------------------------
+        # 6. MEDICATION STATEMENT & MEDICATION NAME FRAGMENTS ("niciplus", "paracetomol tablet", "take tablet", "take Disprin")
         # ---------------------------------------------------------
         if intent.category in [IntentCategory.MEDICATION_STATEMENT, IntentCategory.MEDICATION_NAME_FRAGMENT]:
             substance = intent.treatment_substance or "medication"
             lower_substance = substance.lower()
 
-            is_emergency_cardiac = any(k in lower_substance for k in ["aspirin", "nitro", "nitroglycerin", "heparin", "morphine", "clopidogrel", "plavix", "statin", "atorvastatin", "metoprolol", "beta blocker"])
+            is_emergency_cardiac = any(k in lower_substance for k in ["disprin", "aspirin", "nitro", "nitroglycerin", "heparin", "morphine", "clopidogrel", "plavix", "statin", "atorvastatin", "metoprolol", "beta blocker"])
             is_ssri_or_off_target = any(k in lower_substance for k in ["sertraline", "sertrakine", "escitalopram", "escita;pram", "paroxetine", "fluoxetine"])
 
             if intent.category == IntentCategory.MEDICATION_NAME_FRAGMENT:
@@ -343,7 +412,7 @@ class FactRetriever:
                 permitted_statement=stmt,
                 is_controlled_shield=True,
                 category="Management",
-                response_source="TREATMENT_POLICY",
+                response_source="CLINICIAN_STATEMENT",
                 fact_key="medication_statement"
             )
 

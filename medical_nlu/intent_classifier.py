@@ -31,6 +31,9 @@ class MedicalIntent(str, Enum):
     MEDICATION_DURATION_QUERY = "MEDICATION_DURATION_QUERY"
     MEDICATION_UNKNOWN = "MEDICATION_UNKNOWN"
 
+    # Contextual Multi-Slot
+    CONTEXTUAL_HISTORY_QUESTION = "CONTEXTUAL_HISTORY_QUESTION"
+
     # Core Clinical Dimensions
     DIET_HISTORY = "DIET_HISTORY"
     SYMPTOM_HISTORY = "SYMPTOM_HISTORY"
@@ -40,12 +43,16 @@ class MedicalIntent(str, Enum):
     SOCIAL_HISTORY = "SOCIAL_HISTORY"
     GENDER_INAPPLICABLE = "GENDER_INAPPLICABLE"
 
-    # Clinical Encounter & Interaction Intents
+    # Clinical Encounter, Directives & Management Intents
     CLARIFICATION = "CLARIFICATION"
     CONFIRMATION = "CONFIRMATION"
     CHALLENGE = "CHALLENGE"
     EMPATHY_REASSURANCE = "EMPATHY_REASSURANCE"
+    MANAGEMENT_INSTRUCTION = "MANAGEMENT_INSTRUCTION"
     MANAGEMENT_STATEMENT = "MANAGEMENT_STATEMENT"
+    LIFESTYLE_MANAGEMENT = "LIFESTYLE_MANAGEMENT"
+    CLINICAL_CLAIM = "CLINICAL_CLAIM"
+    CLINICAL_INTERPRETATION = "CLINICAL_INTERPRETATION"
     DIAGNOSIS_STATEMENT = "DIAGNOSIS_STATEMENT"
     DIAGNOSIS_REQUEST = "DIAGNOSIS_REQUEST"
     EXAM_REQUEST = "EXAM_REQUEST"
@@ -132,6 +139,14 @@ class StructuredNLUResult:
     relationship: str = "NEW_QUESTION"
     referenced_topic: Optional[str] = None
     referenced_slot: Optional[str] = None
+    message_role: str = "HISTORY_QUESTION"
+    patient_state_slots_to_retrieve: List[str] = field(default_factory=list)
+    medication_reference: bool = False
+    diet_reference: bool = False
+    meal: Optional[str] = None
+    temporal_relation: Optional[str] = None
+    lifestyle_behaviors: List[str] = field(default_factory=list)
+    claim_type: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -153,7 +168,15 @@ class StructuredNLUResult:
             "is_follow_up": self.is_follow_up,
             "relationship": self.relationship,
             "referenced_topic": self.referenced_topic,
-            "referenced_slot": self.referenced_slot
+            "referenced_slot": self.referenced_slot,
+            "message_role": self.message_role,
+            "patient_state_slots_to_retrieve": self.patient_state_slots_to_retrieve,
+            "medication_reference": self.medication_reference,
+            "diet_reference": self.diet_reference,
+            "meal": self.meal,
+            "temporal_relation": self.temporal_relation,
+            "lifestyle_behaviors": self.lifestyle_behaviors,
+            "claim_type": self.claim_type
         }
 
 
@@ -251,8 +274,130 @@ class MedicalIntentClassifier:
             treatment_substance: Optional[str] = None,
             is_follow_up: bool = False,
             relationship: str = "NEW_QUESTION",
-            temporal: Optional[str] = None
+            temporal: Optional[str] = None,
+            message_role: Optional[str] = None,
+            patient_state_slots_to_retrieve: Optional[List[str]] = None,
+            medication_reference: bool = False,
+            diet_reference: bool = False,
+            meal: Optional[str] = None,
+            temporal_relation: Optional[str] = None,
+            lifestyle_behaviors: Optional[List[str]] = None,
+            claim_type: Optional[str] = None
         ) -> StructuredNLUResult:
+            # Auto-determine message role if not explicitly provided
+            if message_role is None:
+                if intent in [MedicalIntent.MANAGEMENT_INSTRUCTION, MedicalIntent.MANAGEMENT_STATEMENT]:
+                    message_role = "MANAGEMENT_INSTRUCTION"
+                elif intent == MedicalIntent.LIFESTYLE_MANAGEMENT:
+                    message_role = "LIFESTYLE_MANAGEMENT"
+                elif intent in [MedicalIntent.MEDICATION_STATEMENT, MedicalIntent.MEDICATION_NAME_FRAGMENT]:
+                    message_role = "MEDICATION_STATEMENT"
+                elif intent in [MedicalIntent.CLINICAL_CLAIM, MedicalIntent.CLINICAL_INTERPRETATION]:
+                    message_role = "CLINICAL_CLAIM"
+                elif intent == MedicalIntent.CONTEXTUAL_HISTORY_QUESTION:
+                    message_role = "CONTEXTUAL_HISTORY_QUESTION"
+                elif intent == MedicalIntent.MEDICATION_HISTORY:
+                    message_role = "MEDICATION_HISTORY_QUESTION"
+                elif intent == MedicalIntent.MEDICATION_ADHERENCE:
+                    message_role = "MEDICATION_ADHERENCE_QUESTION"
+                elif intent == MedicalIntent.MEDICATION_PURPOSE_QUERY:
+                    message_role = "MEDICATION_PURPOSE_QUESTION"
+                elif intent == MedicalIntent.MEDICATION_EFFECT_QUERY:
+                    message_role = "MEDICATION_EFFECT_QUESTION"
+                elif intent == MedicalIntent.MEDICATION_DOSAGE_QUERY:
+                    message_role = "MEDICATION_DOSAGE_QUESTION"
+                elif intent == MedicalIntent.MEDICATION_FREQUENCY_QUERY:
+                    message_role = "MEDICATION_FREQUENCY_QUESTION"
+                elif intent == MedicalIntent.MEDICATION_ROUTE_QUERY:
+                    message_role = "MEDICATION_ROUTE_QUESTION"
+                elif intent == MedicalIntent.MEDICATION_SIDE_EFFECT_QUERY:
+                    message_role = "MEDICATION_SIDE_EFFECT_QUESTION"
+                elif intent == MedicalIntent.MEDICATION_ALLERGY_QUERY:
+                    message_role = "MEDICATION_ALLERGY_QUESTION"
+                elif intent == MedicalIntent.MEDICATION_DURATION_QUERY:
+                    message_role = "MEDICATION_DURATION_QUESTION"
+                elif intent == MedicalIntent.EMPATHY_REASSURANCE:
+                    message_role = "EMPATHY_REASSURANCE"
+                elif intent == MedicalIntent.EXAM_REQUEST:
+                    message_role = "EXAM_REQUEST"
+                elif intent == MedicalIntent.INVESTIGATION_REQUEST:
+                    message_role = "INVESTIGATION_REQUEST"
+                elif intent == MedicalIntent.DIAGNOSIS_STATEMENT:
+                    message_role = "DIAGNOSIS_STATEMENT"
+                elif intent == MedicalIntent.CLARIFICATION:
+                    message_role = "CLARIFICATION"
+                elif intent == MedicalIntent.CONFIRMATION:
+                    message_role = "CONFIRMATION"
+                elif intent == MedicalIntent.CHALLENGE:
+                    message_role = "CHALLENGE"
+                elif intent == MedicalIntent.OFF_TOPIC:
+                    message_role = "OFF_TOPIC"
+                elif intent in [MedicalIntent.UNKNOWN, MedicalIntent.UNCLEAR, MedicalIntent.MEDICATION_UNKNOWN]:
+                    message_role = "UNKNOWN"
+                else:
+                    message_role = "HISTORY_QUESTION"
+
+            # Auto-determine patient_state_slots_to_retrieve if not explicitly provided
+            if patient_state_slots_to_retrieve is None:
+                if message_role in [
+                    "MANAGEMENT_INSTRUCTION", "LIFESTYLE_MANAGEMENT", "MEDICATION_STATEMENT",
+                    "CLINICAL_CLAIM", "EMPATHY_REASSURANCE", "DIAGNOSIS_STATEMENT", "DIAGNOSIS_REQUEST",
+                    "CHALLENGE", "CLARIFICATION", "CONFIRMATION", "UNKNOWN", "OFF_TOPIC"
+                ]:
+                    patient_state_slots_to_retrieve = []
+                elif intent == MedicalIntent.MEDICATION_HISTORY:
+                    patient_state_slots_to_retrieve = ["current_medications"]
+                elif intent == MedicalIntent.MEDICATION_ADHERENCE:
+                    patient_state_slots_to_retrieve = ["medication_adherence"]
+                elif intent == MedicalIntent.MEDICATION_DOSAGE_QUERY:
+                    patient_state_slots_to_retrieve = ["medication_dosage"]
+                elif intent == MedicalIntent.MEDICATION_FREQUENCY_QUERY:
+                    patient_state_slots_to_retrieve = ["medication_frequency"]
+                elif intent == MedicalIntent.MEDICATION_ROUTE_QUERY:
+                    patient_state_slots_to_retrieve = ["medication_route"]
+                elif intent == MedicalIntent.MEDICATION_PURPOSE_QUERY:
+                    patient_state_slots_to_retrieve = ["medication_purpose"]
+                elif intent == MedicalIntent.MEDICATION_SIDE_EFFECT_QUERY:
+                    patient_state_slots_to_retrieve = ["medication_side_effects"]
+                elif intent in [MedicalIntent.MEDICATION_ALLERGY_QUERY, MedicalIntent.ALLERGIES]:
+                    patient_state_slots_to_retrieve = ["allergies"]
+                elif intent == MedicalIntent.MEDICATION_DURATION_QUERY:
+                    patient_state_slots_to_retrieve = ["medication_duration"]
+                elif intent == MedicalIntent.CONTEXTUAL_HISTORY_QUESTION:
+                    patient_state_slots_to_retrieve = ["contextual_medication_meal"]
+                elif intent == MedicalIntent.DIET_HISTORY:
+                    patient_state_slots_to_retrieve = [slot] if slot else ["diet"]
+                elif intent == MedicalIntent.SOCIAL_HISTORY:
+                    patient_state_slots_to_retrieve = ["social_history"]
+                elif intent == MedicalIntent.PAST_MEDICAL_HISTORY:
+                    patient_state_slots_to_retrieve = ["past_medical_history"]
+                elif intent == MedicalIntent.FAMILY_HISTORY:
+                    patient_state_slots_to_retrieve = ["family_history"]
+                elif intent == MedicalIntent.ONSET_TIMING:
+                    patient_state_slots_to_retrieve = ["onset"]
+                elif intent == MedicalIntent.ONSET_ACTIVITY:
+                    patient_state_slots_to_retrieve = ["onset_activity"]
+                elif intent == MedicalIntent.CHARACTER:
+                    patient_state_slots_to_retrieve = ["character"]
+                elif intent == MedicalIntent.SEVERITY:
+                    patient_state_slots_to_retrieve = ["severity"]
+                elif intent == MedicalIntent.LOCATION:
+                    patient_state_slots_to_retrieve = ["location"]
+                elif intent == MedicalIntent.RADIATION:
+                    patient_state_slots_to_retrieve = ["radiation"]
+                elif intent == MedicalIntent.TIMING:
+                    patient_state_slots_to_retrieve = ["timing"]
+                elif intent == MedicalIntent.AGGRAVATING_FACTORS:
+                    patient_state_slots_to_retrieve = ["aggravating_factors"]
+                elif intent == MedicalIntent.RELIEVING_FACTORS:
+                    patient_state_slots_to_retrieve = ["relieving_factors"]
+                elif intent == MedicalIntent.ASSOCIATED_SYMPTOM:
+                    patient_state_slots_to_retrieve = [slot] if slot else ["associated_symptoms"]
+                elif intent == MedicalIntent.OPENING_COMPLAINT:
+                    patient_state_slots_to_retrieve = ["chief_complaint"]
+                else:
+                    patient_state_slots_to_retrieve = [slot] if slot else []
+
             return StructuredNLUResult(
                 raw_query=raw_query,
                 normalized_query=norm_text,
@@ -272,8 +417,23 @@ class MedicalIntentClassifier:
                 is_follow_up=is_follow_up,
                 relationship=relationship,
                 referenced_topic=last_topic if is_follow_up else None,
-                referenced_slot=last_slot if is_follow_up else None
+                referenced_slot=last_slot if is_follow_up else None,
+                message_role=message_role,
+                patient_state_slots_to_retrieve=patient_state_slots_to_retrieve,
+                medication_reference=medication_reference,
+                diet_reference=diet_reference,
+                meal=meal,
+                temporal_relation=temporal_relation,
+                lifestyle_behaviors=lifestyle_behaviors or [],
+                claim_type=claim_type
             )
+
+        # Interrogative check for questions vs statements
+        is_interrogative = any(norm_text.startswith(w) for w in [
+            "did you", "do you", "have you", "had you", "are you", "what", "which",
+            "can you tell", "how", "why", "is it", "does", "any", "where", "when",
+            "could you tell", "tell me what", "tell me when", "tell me where", "tell me about"
+        ]) or raw_query.strip().endswith("?")
 
         # -------------------------------------------------------------
         # 0. UNCLEAR / NOISE SHIELD
@@ -378,15 +538,197 @@ class MedicalIntentClassifier:
             return result(MedicalIntent.CONFIRMATION, "CONFIRMATION", last_topic or "general", last_slot or "confirmation", ui_category="General", is_follow_up=True, relationship="CONFIRMATION")
 
         # -------------------------------------------------------------
-        # 5. EMPATHY & BEDSIDE REASSURANCE
+        # 5. CLINICIAN CLAIMS & CLINICAL INTERPRETATIONS / HYPOTHESES
+        # -------------------------------------------------------------
+        claim_patterns = [
+            r"\b(you\s+)?(take|taking|take in|took|consume)\s+(in\s+)?(a\s+)?(high volume|too much|too many|large amount|large dose)\b.*\b(medicine|medication|meds|tablets?|pills?)\b.*\b(that is why|thats why|that's why|cause|causing|causes|gives you|lead to|leads to|reason)\b.*\b(anxiety|panic|dizziness|symptoms?|palpitations?|trouble)\b",
+            r"\b(high volume of|too much|too many)\s+(medicine|medication|meds|tablets?|pills?)\b.*\b(that is why|thats why|that's why|cause|causing|causes|gives you|lead to|leads to)\b",
+            r"\b(medicine|medication|meds|tablets?|pills?)\b.*\b(that is why|thats why|that's why|causes?|causing|reason for)\b.*\b(anxiety|panic|dizziness|stress)\b",
+            r"\b(high volume|too much|overdose)\b.*\b(medicine|medication|meds|tablets?|pills?)\b",
+            r"\b(that is why|thats why|that's why)\s+(you\s+)?(get|have|got|feel|are experiencing)\s+(a\s+)?(anxiety|panic|dizziness|symptoms?)\b",
+            r"\b(maybe|perhaps|possibly|i wonder if|could it be that|could be that)\s+you\s+(take|took|are taking)\s+(your\s+)?(medicine|medication|tablets?|pills?)\s+(with|on\s+an?)\s+empty\s+stomach\b",
+            r"\b(take|taking|took)\s+(your\s+)?(medicine|medication|tablets?|pills?)\s+(with|on\s+an?)\s+empty\s+stomach\b",
+            r"\b(empty stomach)\b",
+            r"\b(your\s+)?(medicine|medication|tablets?|pills?)\s+(is|are|might be|could be|may be)\s+(causing|the cause of|making you)\b",
+        ]
+        if any(re.search(pat, norm_text) for pat in claim_patterns):
+            claim_type = "empty_stomach" if "empty stomach" in norm_text else ("medication_anxiety" if "anxiety" in norm_text else "clinical_hypothesis")
+            return result(
+                intent=MedicalIntent.CLINICAL_CLAIM,
+                primary_type="CLINICAL_CLAIM",
+                topic="clinical_claim",
+                slot="clinician_claim",
+                ui_category="General",
+                claim_type=claim_type,
+                message_role="CLINICAL_CLAIM",
+                patient_state_slots_to_retrieve=[]
+            )
+
+        # -------------------------------------------------------------
+        # 6. CONTEXTUAL MULTI-SLOT QUESTIONS (Medication + Food/Meal + Temporal)
+        # -------------------------------------------------------------
+        contextual_patterns = [
+            r"\b(before|after)\s+(taking|you took)\s+(the\s+|your\s+)?(medicine|medication|tablets?|pills?|meds?)\s+(had\s+you|did\s+you\s+(have|eat))\s+(breakfast|lunch|dinner|meals?|food)\b",
+            r"\b(before|after)\s+(taking|you took)\s+(the\s+|your\s+)?(medicine|medication|tablets?|pills?|meds?)\s+(had\s+you|did\s+you\s+have)\s+breakfast\b",
+            r"\b(had\s+you\s+breakfast|did\s+you\s+(have|eat)\s+breakfast)\s+(before|after)\s+(taking|you took)\s+(the\s+|your\s+)?(medicine|medication|tablets?|pills?|meds?)\b",
+            r"\bbefore\s+taking\s+(the\s+|your\s+)?(medicine|medication|tablets?|pills?|meds?)\s+had\s+you\s+breakfast\b",
+            r"\bbefore\s+taking\s+(the\s+|your\s+)?(medicine|medication|tablets?|pills?|meds?)\s+did\s+you\s+have\s+breakfast\b",
+            r"\bdid\s+you\s+(take|have)\s+(your\s+|the\s+)?(medicine|medication|tablets?|pills?)\s+before\s+coming\s+to\s+(the\s+)?(hospital|office|clinic|er)\b",
+            r"\bdid\s+you\s+eat\s+before\s+taking\s+(the\s+|your\s+)?(tablet|pill|medicine|medication)\b"
+        ]
+        if any(re.search(pat, norm_text) for pat in contextual_patterns) or (
+            ("breakfast" in norm_text or "lunch" in norm_text or "dinner" in norm_text or "eat" in norm_text or "food" in norm_text)
+            and any(m in norm_text for m in ["medicine", "medication", "tablet", "pill"])
+            and ("before" in norm_text or "after" in norm_text or "prior" in norm_text)
+        ):
+            meal_name = "breakfast" if "breakfast" in norm_text else ("lunch" if "lunch" in norm_text else ("dinner" if "dinner" in norm_text else "meal"))
+            temp_rel = "before_medication" if "before" in norm_text else "after_medication"
+            return result(
+                intent=MedicalIntent.CONTEXTUAL_HISTORY_QUESTION,
+                primary_type="CONTEXTUAL_HISTORY_QUESTION",
+                topic="contextual_history",
+                slot="medication_and_meal",
+                ui_category="Meds",
+                message_role="CONTEXTUAL_HISTORY_QUESTION",
+                patient_state_slots_to_retrieve=["contextual_medication_meal"],
+                medication_reference=True,
+                diet_reference=True,
+                meal=meal_name,
+                temporal_relation=temp_rel
+            )
+
+        # -------------------------------------------------------------
+        # 7. MANAGEMENT INSTRUCTIONS & RELAXATION / REASSURANCE
+        # -------------------------------------------------------------
+        relaxation_patterns = [
+            r"\b(deep\s+breath|deep\s+breaths|slow\s+breath|slow\s+breaths|breath\s+relaxation)\b",
+            r"\b(relaxation\s+for\s+\d+\s+(to\s+\d+\s+)?minutes?|relax\s+for\s+\d+\s+(to\s+\d+\s+)?minutes?|relax\s+for\s+a\s+few\s+minutes?)\b",
+            r"\b(take\s+(a\s+)?deep\s+breath|take\s+some\s+deep\s+breaths|take\s+slow\s+breaths|breathe\s+in\s+and\s+out|breathe\s+slowly|breathe\s+deeply)\b",
+            r"\b(deep\s+breath\s+relaxation)\b",
+            r"\b(try\s+to\s+relax|try\s+and\s+relax|take\s+a\s+deep\s+breath\s+and\s+relax)\b",
+            r"\b(sit\s+down\s+and\s+rest|have\s+you\s+sit\s+down|have\s+you\s+lie\s+down|sit\s+down|lie\s+down|take\s+a\s+seat|have\s+a\s+seat|rest\s+for\s+a\s+bit|rest\s+now)\b",
+            r"\b(you\s+(should|can|need\s+to|must|have\s+to)|let\s+us|try\s+to|i\s+want\s+you\s+to|we\s+will|we\s+shall)\s+(take\s+(some\s+|a\s+)?rest|rest|sit\s+down|lie\s+down|relax|stay\s+in\s+bed|stay\s+still|take\s+it\s+easy|stay\s+calm|monitor\s+you)\b",
+            r"\b(we\s+will\s+monitor\s+you|monitor\s+you)\b",
+            r"\b(take\s+(some\s+|a\s+)?rest)\b"
+        ]
+        if any(re.search(pat, norm_text) for pat in relaxation_patterns):
+            slot_name = "breathing_relaxation" if any(b in norm_text for b in ["breath", "breathe", "relaxation"]) else "rest_or_monitoring"
+            return result(
+                intent=MedicalIntent.MANAGEMENT_INSTRUCTION,
+                primary_type="MANAGEMENT_INSTRUCTION",
+                topic="management",
+                slot=slot_name,
+                ui_category="Management",
+                empathy=True,
+                message_role="MANAGEMENT_INSTRUCTION",
+                patient_state_slots_to_retrieve=[]
+            )
+
+        # -------------------------------------------------------------
+        # 8. LIFESTYLE / BEHAVIORAL MANAGEMENT ADVICE
+        # -------------------------------------------------------------
+        lifestyle_advice_patterns = [
+            r"\b(reduce|cut\s+down|decrease|stop|avoid|limit|lower)\s+(caffeine|coffee|energy\s+drinks?|smoking|alcohol|stress|salt)\b",
+            r"\b(regular\s+meals?|regular\s+means?|regular\s+sleep|enough\s+sleep|sleep|lightweight|light\s+exercise|exercise|workout|healthy\s+diet)\b",
+            r"\b(lifestyle\s+(changes?|advice|management|modification))\b",
+            r"\b(you\s+should|recommend|suggest|need\s+to|advise\s+you\s+to)\s+(reduce|exercise|sleep|cut\s+down|eat\s+regularly|change\s+your\s+lifestyle)\b"
+        ]
+        lifestyle_entities = [e for e in entities if e.type == "LIFESTYLE_BEHAVIOR"]
+        has_lifestyle_directive = (
+            any(re.search(pat, norm_text) for pat in lifestyle_advice_patterns)
+            or (len(lifestyle_entities) >= 2 and any(k in norm_text for k in ["reduce", "sleep", "exercise", "regular", "avoid", "stop", "and", "or"]))
+            or any(k in norm_text for k in ["reduce caffeine", "energy drink", "lightweight or exercise", "light exercise", "regular sleep"])
+        )
+        if has_lifestyle_directive and not is_interrogative:
+            behaviors = [e.normalized for e in lifestyle_entities] if lifestyle_entities else ["lifestyle_modification"]
+            return result(
+                intent=MedicalIntent.LIFESTYLE_MANAGEMENT,
+                primary_type="LIFESTYLE_MANAGEMENT",
+                topic="lifestyle_management",
+                slot="lifestyle_advice",
+                ui_category="Management",
+                message_role="LIFESTYLE_MANAGEMENT",
+                lifestyle_behaviors=behaviors,
+                patient_state_slots_to_retrieve=[]
+            )
+
+        # -------------------------------------------------------------
+        # 9. CLINICIAN DIRECTIVES & MEDICATION STATEMENTS (Prescribing / Orders)
+        # -------------------------------------------------------------
+        med_statement_patterns = [
+            r"\b(you\s+can\s+take\s+(a\s+)?(disprin|aspirin|paracetamol|tablet|pill|medicine|medication|nicip|nicip\s+plus))\b",
+            r"\b(take\s+(a\s+|the\s+|this\s+|some\s+)?(disprin|aspirin|paracetamol|tablet|pill|medicine|medication|sertraline|nicip|nicip\s+plus|atorvastatin|amlodipine|inhaler|ibuprofen|tylenol|capsule|drug))\b",
+            r"\b(you\s+(should|can|need\s+to|must|have\s+to)|i\s+(will|am\s+going\s+to|can|want\s+to|recommend\s+you)|let\s+us|we\s+(will|should|can))\s+(take|give\s+you|prescribe|administer|try|start\s+you\s+on|take\s+this)\s+(this\s+|some\s+|the\s+|a\s+)?(disprin|medicine|medication|pill|drug|tablet|treatment|dose|prescription|paracetamol|aspirin|nicip|nicip\s+plus|atorvastatin|amlodipine|tablet)\b",
+            r"\b(you\s+should\s+take|take)\s+(disprin|tablet|medicine|a\s+tablet|a\s+pill|paracetamol|aspirin|sertraline|nicip\s+plus|atorvastatin|amlodipine|this\s+tablet|this\s+medication)\b",
+            r"\b(prescribe|prescribing|order)\s+(medication|medicine|pill|drug|tablet|treatment)\b",
+            r"\b(i\s+am\s+giving\s+you|i\s+will\s+give\s+you|let\s+me\s+give\s+you)\s+(some\s+|a\s+|the\s+)?(disprin|medicine|medication|pill|tablet|drug|dose)\b",
+            r"^start\s+(this\s+|a\s+|the\s+)?(tablet|medicine|medication|pill|drug)\b",
+            r"^you\s+can\s+take\s+the\s+medicine\b"
+        ]
+        if not is_interrogative and any(re.search(pat, norm_text) for pat in med_statement_patterns):
+            substance = "Disprin" if "disprin" in norm_text else (med_entities[0].text if med_entities else "medication")
+            return result(
+                intent=MedicalIntent.MEDICATION_STATEMENT,
+                primary_type="MEDICATION_STATEMENT",
+                topic="medication_statement",
+                slot="treatment_order",
+                ui_category="Management",
+                empathy=False,
+                treatment_substance=substance,
+                message_role="MEDICATION_STATEMENT",
+                patient_state_slots_to_retrieve=[]
+            )
+
+        # Standalone Medication Name Fragment
+        clean_words = re.sub(r"[^\w\s]", "", norm_text).strip()
+        is_standalone_med = False
+        if len(tokens) <= 4:
+            if "disprin" in clean_words:
+                is_standalone_med = True
+            elif med_entities and len(med_entities) > 0:
+                med_name = med_entities[0].normalized
+                matched = med_entities[0].text
+                if clean_words in [
+                    matched, f"{matched} tablet", f"{matched} tablets", f"take {matched}",
+                    f"{matched} pill", f"{matched} pills", med_name, f"{med_name} tablet",
+                    f"{med_name} tablets", "disprin", "disprin tablet", "take disprin", "take a disprin tablet"
+                ]:
+                    is_standalone_med = True
+
+        if is_standalone_med and not is_interrogative:
+            substance = "Disprin" if "disprin" in clean_words else (med_entities[0].text if med_entities else "medication")
+            if clean_words.startswith("take") or "disprin" in clean_words:
+                return result(
+                    intent=MedicalIntent.MEDICATION_STATEMENT,
+                    primary_type="MEDICATION_STATEMENT",
+                    topic="medication_statement",
+                    slot="treatment_order",
+                    ui_category="Management",
+                    treatment_substance=substance,
+                    message_role="MEDICATION_STATEMENT",
+                    patient_state_slots_to_retrieve=[]
+                )
+            else:
+                return result(
+                    intent=MedicalIntent.MEDICATION_NAME_FRAGMENT,
+                    primary_type="MEDICATION_STATEMENT",
+                    topic="medication_statement",
+                    slot="medication_fragment",
+                    ui_category="Management",
+                    treatment_substance=substance,
+                    message_role="MEDICATION_STATEMENT",
+                    patient_state_slots_to_retrieve=[]
+                )
+
+        # -------------------------------------------------------------
+        # 10. EMPATHY & BEDSIDE REASSURANCE
         # -------------------------------------------------------------
         empathy_phrases = [
             "sorry", "concern", "take care", "take good care", "help you", "comfortable",
-            "breathe", "stay calm", "don't worry", "take your time", "here for you",
+            "stay calm", "don't worry", "take your time", "here for you",
             "make you comfortable", "must be frightening", "understand", "we are going to take care",
             "we are going to take good care", "i hear you", "you are safe", "we will figure this out", "in good hands",
-            "take a breath", "take a deep breath", "take a slow breath", "i am here with you",
-            "you are going to be okay", "you will be okay", "going through this"
+            "i am here with you", "you are going to be okay", "you will be okay", "going through this"
         ]
         empathy_detected = any(p in norm_text for p in empathy_phrases)
         clinical_keywords = [
@@ -394,58 +736,21 @@ class MedicalIntentClassifier:
             "medicine", "medication", "pill", "tablet", "allerg", "vomit", "body ache", "cough", "diarrhea", "inhaler", "start", "condition", "describe", "feel"
         ]
         if empathy_detected and len(tokens) <= 25 and not any(k in norm_text for k in clinical_keywords):
-            return result(MedicalIntent.EMPATHY_REASSURANCE, "EMPATHY_REASSURANCE", "general", "empathy", ui_category="General", empathy=True)
+            return result(
+                intent=MedicalIntent.EMPATHY_REASSURANCE,
+                primary_type="EMPATHY_REASSURANCE",
+                topic="general",
+                slot="empathy",
+                ui_category="General",
+                empathy=True,
+                message_role="EMPATHY_REASSURANCE",
+                patient_state_slots_to_retrieve=[]
+            )
 
         # -------------------------------------------------------------
-        # 6. CLINICIAN DIRECTIVES & STATEMENTS (Prescribing / Orders)
+        # 11. SPECIALIZED MEDICATION INTENTS (ALLERGIES, SIDE EFFECTS, PURPOSE, DOSAGE, FREQUENCY, ROUTE, DURATION, ADHERENCE)
         # -------------------------------------------------------------
-        med_statement_patterns = [
-            r"^(take|try|have|start|administer|give)\s+(a\s+|the\s+|this\s+|some\s+)?(paracetamol|tablet|pill|medicine|medication|aspirin|sertraline|nicip|nicip\s+plus|atorvastatin|amlodipine|inhaler|ibuprofen|tylenol|capsule|drug)\b",
-            r"\b(you (should|can|need to|must|have to)|i (will|am going to|can|want to|recommend you)|let us|we (will|should|can))\s+(take|give you|prescribe|administer|try|start you on|take this)\s+(this\s+|some\s+|the\s+|a\s+)?(medicine|medication|pill|drug|tablet|treatment|dose|prescription|paracetamol|aspirin|nicip|nicip\s+plus|atorvastatin|amlodipine|tablet)\b",
-            r"\b(you should take|take)\s+(tablet|medicine|a tablet|a pill|paracetamol|aspirin|sertraline|nicip\s+plus|atorvastatin|amlodipine|this tablet|this medication)\b",
-            r"\b(prescribe|prescribing|order)\s+(medication|medicine|pill|drug|tablet|treatment)\b",
-            r"\b(i am giving you|i will give you|let me give you)\s+(some\s+|a\s+|the\s+)?(medicine|medication|pill|tablet|drug|dose)\b",
-            r"^start\s+(this\s+|a\s+|the\s+)?(tablet|medicine|medication|pill|drug)\b",
-            r"^you\s+can\s+take\s+the\s+medicine\b"
-        ]
-        is_interrogative = any(norm_text.startswith(w) for w in ["did you", "do you", "have you", "had you", "are you", "what", "which", "can you tell", "how", "why", "is it", "does", "any"])
-
-        if not is_interrogative and any(re.search(pat, norm_text) for pat in med_statement_patterns):
-            substance = med_entities[0].normalized if med_entities else "medication"
-            return result(MedicalIntent.MEDICATION_STATEMENT, "MEDICATION_STATEMENT", "medication", "treatment_order", ui_category="Management", empathy=empathy_detected, treatment_substance=substance)
-
-        # Medication Name Fragment
-        clean_words = re.sub(r"[^\w\s]", "", norm_text).strip()
-        is_standalone_med = False
-        if len(tokens) <= 3:
-            if med_entities and len(med_entities) > 0:
-                med_name = med_entities[0].normalized
-                matched = med_entities[0].text
-                if clean_words in [matched, f"{matched} tablet", f"{matched} tablets", f"take {matched}", f"{matched} pill", f"{matched} pills", med_name, f"{med_name} tablet", f"{med_name} tablets"]:
-                    is_standalone_med = True
-
-        if is_standalone_med and not is_interrogative:
-            substance = med_entities[0].normalized if med_entities else "medication"
-            if clean_words.startswith("take"):
-                return result(MedicalIntent.MEDICATION_STATEMENT, "MEDICATION_STATEMENT", "medication", "treatment_order", ui_category="Management", empathy=empathy_detected, treatment_substance=substance)
-            else:
-                return result(MedicalIntent.MEDICATION_NAME_FRAGMENT, "MEDICATION_NAME_FRAGMENT", "medication", "medication_fragment", ui_category="Management", empathy=empathy_detected, treatment_substance=substance)
-
-        # Non-pharmacological Management Statement
-        mgmt_patterns = [
-            r"\b(you (should|can|need to|must|have to)|let us|try to|i want you to|we will|we shall|let us have you|i would like you to)\s+(take (some |a )?rest|rest|sit down|lie down|relax|stay in bed|stay still|take it easy|stay calm|monitor you|keep you under observation)\b",
-            r"\b(sit down and rest|have you sit down|have you lie down|sit down|lie down|take a seat|have a seat|rest for a bit|rest now)\b",
-            r"^(you should take (some |a )?rest|take (some |a )?rest|have (some |a )?rest|sit down|lie down|rest now|rest a bit|we will monitor you)\b",
-            r"\b(we will monitor you|monitor you)\b",
-            r"\b(take (some |a )?rest)\b",
-        ]
-        if any(re.search(pat, norm_text) for pat in mgmt_patterns):
-            return result(MedicalIntent.MANAGEMENT_STATEMENT, "MANAGEMENT_STATEMENT", "management", "rest_or_monitoring", ui_category="Management", empathy=empathy_detected)
-
-        # -------------------------------------------------------------
-        # 7. SPECIALIZED MEDICATION INTENTS (ALLERGIES, SIDE EFFECTS, PURPOSE, DOSAGE, FREQUENCY, ROUTE, DURATION, ADHERENCE)
-        # -------------------------------------------------------------
-        # 7A. Medication Allergy Query
+        # 11A. Medication Allergy Query
         allergy_patterns = [
             r"\b(allergic\s+to\s+(any\s+|the\s+)?(medication|medicine|medicines|drug|drugs|pills?|penicillin))\b",
             r"\b(which\s+(medicines?|medications?|drugs?)\s+are\s+you\s+allergic\s+to)\b",
@@ -460,7 +765,7 @@ class MedicalIntentClassifier:
         ):
             return result(MedicalIntent.MEDICATION_ALLERGY_QUERY, "HISTORY_QUESTION", "allergies", "drug_allergies", ui_category="Allergies", empathy=empathy_detected)
 
-        # 7B. Medication Side Effect Query
+        # 11B. Medication Side Effect Query
         side_effect_patterns = [
             r"\b(cause|causing|causes|make\s+you|makes\s+you|give\s+you|gives\s+you|lead\s+to)\s+(dizzy|dizziness|nausea|nauseous|headache|swelling|cough|side\s+effects?|problems?|vomiting)\b",
             r"\b(side\s+effects?|adverse\s+effects?|adverse\s+reactions?|reactions?)\s*(from|of|with)?\s*(this\s+|the\s+|your\s+)?(medicine|medication|tablet|pill|amlodipine|atorvastatin|[a-z]+)?\b",
@@ -479,7 +784,7 @@ class MedicalIntentClassifier:
         ):
             return result(MedicalIntent.MEDICATION_SIDE_EFFECT_QUERY, "HISTORY_QUESTION", "medication", "medication_side_effects", ui_category="Meds", empathy=empathy_detected)
 
-        # 7C. Medication Purpose / Indication Query
+        # 11C. Medication Purpose / Indication Query
         purpose_patterns = [
             r"\b(what\s+is\s+(this\s+|the\s+|your\s+)?([a-z]+)\s+for)\b",
             r"\b(why\s+(are\s+you\s+taking|do\s+you\s+take|were\s+you\s+prescribed)\s+([a-z]+))\b",
@@ -492,7 +797,7 @@ class MedicalIntentClassifier:
         if any(re.search(pat, norm_text) for pat in purpose_patterns):
             return result(MedicalIntent.MEDICATION_PURPOSE_QUERY, "HISTORY_QUESTION", "medication", "medication_purpose", ui_category="Meds", empathy=empathy_detected)
 
-        # 7D. Medication Dosage Query
+        # 11D. Medication Dosage Query
         dosage_patterns = [
             r"\b(how\s+much\s+([a-z]+)\s+do\s+you\s+take)\b",
             r"\b(what\s+dose\s+(are\s+you\s+on|of\s+([a-z]+)\s+do\s+you\s+take|do\s+you\s+take))\b",
@@ -506,7 +811,7 @@ class MedicalIntentClassifier:
         if any(re.search(pat, norm_text) for pat in dosage_patterns):
             return result(MedicalIntent.MEDICATION_DOSAGE_QUERY, "HISTORY_QUESTION", "medication", "medication_dosage", ui_category="Meds", empathy=empathy_detected)
 
-        # 7E. Medication Frequency Query
+        # 11E. Medication Frequency Query
         frequency_patterns = [
             r"\b(how\s+often\s+do\s+you\s+take\s+(it|this|them|your\s+medicine|your\s+medication|[a-z]+))\b",
             r"\b(how\s+many\s+times\s+(a\s+day|per\s+day|a\s+week))\b",
@@ -518,7 +823,7 @@ class MedicalIntentClassifier:
         if any(re.search(pat, norm_text) for pat in frequency_patterns):
             return result(MedicalIntent.MEDICATION_FREQUENCY_QUERY, "HISTORY_QUESTION", "medication", "medication_frequency", ui_category="Meds", empathy=empathy_detected)
 
-        # 7F. Medication Route / Form Query
+        # 11F. Medication Route / Form Query
         route_patterns = [
             r"\b(is\s+it\s+a\s+(tablet|pill|capsule|inhaler|injection|cream|liquid))\b",
             r"\b(do\s+you\s+inject\s+it|how\s+do\s+you\s+take\s+it|is\s+it\s+oral|is\s+it\s+by\s+mouth|is\s+it\s+an\s+inhaler)\b",
@@ -531,7 +836,7 @@ class MedicalIntentClassifier:
         if any(re.search(pat, norm_text) for pat in route_patterns):
             return result(MedicalIntent.MEDICATION_ROUTE_QUERY, "HISTORY_QUESTION", "medication", "medication_route_form", ui_category="Meds", empathy=empathy_detected)
 
-        # 7G. Medication Duration Query
+        # 11G. Medication Duration Query
         duration_patterns = [
             r"\b(how\s+long\s+have\s+you\s+been\s+(taking|on)\s+(this|your|[a-z]+))\b",
             r"\b(when\s+did\s+you\s+start\s+(taking|on)\s+(this|your|[a-z]+))\b",
@@ -540,7 +845,7 @@ class MedicalIntentClassifier:
         if any(re.search(pat, norm_text) for pat in duration_patterns):
             return result(MedicalIntent.MEDICATION_DURATION_QUERY, "HISTORY_QUESTION", "medication", "medication_duration", ui_category="Meds", empathy=empathy_detected)
 
-        # 7H. Medication Name Query
+        # 11H. Medication Name Query
         name_query_patterns = [
             r"^what\s+is\s+this\s+(medicine|medication|drug|pill|tablet)\b",
             r"^which\s+drug\s+is\s+this\b",
@@ -550,7 +855,7 @@ class MedicalIntentClassifier:
         if any(re.search(pat, norm_text) for pat in name_query_patterns):
             return result(MedicalIntent.MEDICATION_NAME_QUERY, "HISTORY_QUESTION", "medication", "medication_name_query", ui_category="Meds", empathy=empathy_detected)
 
-        # 7I. Medication Adherence Query
+        # 11I. Medication Adherence Query
         adherence_patterns = [
             r"\b(did\s+you\s+take\s+(your\s+)?(morning\s+|this\s+morning\s+)(medicine|medication|meds|tablets?|pills?))\b",
             r"\b(did\s+you\s+take\s+(your\s+)?(medicine|medication|meds|tablets?|pills?)\s+(this\s+morning|today|yesterday|last\s+night))\b",
@@ -589,11 +894,11 @@ class MedicalIntentClassifier:
             return result(MedicalIntent.MEDICATION_HISTORY, "HISTORY_QUESTION", "medication", "inhaler_use", ui_category="Meds", empathy=empathy_detected)
 
         # -------------------------------------------------------------
-        # 8. GENERAL MEDICATION HISTORY
+        # 12. GENERAL MEDICATION HISTORY
         # -------------------------------------------------------------
         med_history_patterns = [
-            r"\b(what\s+(medications?|medicines?|pills?|drugs?|tablets?|prescriptions?|meds)\s+(do you|are you|did you)\s+(take|use|have|eat|on|prescribed))\b",
-            r"\b(which\s+(medications?|medicines?|pills?|drugs?|tablets?)\s+(do you|are you|did you)\s+(take|use|have|eat|on))\b",
+            r"\b(what\s+(medications?|medicines?|pills?|drugs?|tablets?|prescriptions?|meds)\s+(do\s+you|are\s+you|did\s+you)\s+(take|use|have|eat|on|prescribed))\b",
+            r"\b(which\s+(medications?|medicines?|pills?|drugs?|tablets?)\s+(do\s+you|are\s+you|did\s+you)\s+(take|use|have|eat|on))\b",
             r"\b(are\s+you\s+(taking|on|eating)\s+(any\s+)?(daily\s+|current\s+|regular\s+)?(type\s+of\s+)?(medications?|medicines?|pills?|prescriptions?|tablets?|drugs?))\b",
             r"\b(are\s+you\s+on\s+([a-z\s]+))\b",
             r"\b(did\s+you\s+(take|eat|have)\s+(any\s+)?(type\s+of\s+|kind\s+of\s+)?(medicine|medication|pill|drug|tablet|meds))\b",
@@ -606,7 +911,7 @@ class MedicalIntentClassifier:
         ]
         has_med_history_pattern = any(re.search(pat, norm_text) for pat in med_history_patterns)
         has_med_verb_inquiry = (
-            len(med_entities) > 0 and any(k in norm_text for k in [
+            len(med_entities) > 0 and is_interrogative and any(k in norm_text for k in [
                 "eat", "ate", "eating", "take", "taken", "taking", "took", "had", "have", "on", "use", "using",
                 "what", "which", "any", "prescript", "daily", "current", "regular", "routine",
                 "did you", "have you", "had you", "are you", "do you", "tell me", "normally"
@@ -616,7 +921,7 @@ class MedicalIntentClassifier:
             return result(MedicalIntent.MEDICATION_HISTORY, "HISTORY_QUESTION", "medication", "current_medications", ui_category="Meds", empathy=empathy_detected, temporal="current")
 
         # -------------------------------------------------------------
-        # 9. DIET HISTORY
+        # 13. DIET HISTORY
         # -------------------------------------------------------------
         diet_triggers = [
             r"\b(breakfast|lunch|dinner|supper|brunch)\b",
@@ -626,7 +931,7 @@ class MedicalIntentClassifier:
             r"\b(diet|food intake|meals?)\b"
         ]
         has_diet_trigger = any(re.search(pat, norm_text) for pat in diet_triggers) or len(food_entities) > 0
-        if has_diet_trigger and len(med_entities) == 0:
+        if has_diet_trigger and len(med_entities) == 0 and is_interrogative:
             slot = "diet_history"
             if "breakfast" in norm_text:
                 slot = "breakfast"
@@ -648,7 +953,7 @@ class MedicalIntentClassifier:
             return result(MedicalIntent.DIET_HISTORY, "HISTORY_QUESTION", "diet", slot, ui_category="SocialHx", empathy=empathy_detected, temporal=time_ref)
 
         # -------------------------------------------------------------
-        # 10. ALLERGIES & PAST MEDICAL HISTORY & GENDER
+        # 14. ALLERGIES & PAST MEDICAL HISTORY & GENDER & SOCIAL HISTORY
         # -------------------------------------------------------------
         if any(k in norm_text for k in ["allerg", "allergic", "drug reaction", "sensitivities", "penicillin"]):
             return result(MedicalIntent.ALLERGIES, "HISTORY_QUESTION", "allergies", "drug_allergies", ui_category="Allergies", empathy=empathy_detected)
@@ -669,11 +974,15 @@ class MedicalIntentClassifier:
         if any(k in norm_text for k in ["family history", "father", "mother", "parent", "genetic", "heart disease in your family", "asthma in your family", "runs in your family"]):
             return result(MedicalIntent.FAMILY_HISTORY, "HISTORY_QUESTION", "family_history", "family_cardiac", ui_category="FamilyHx", empathy=empathy_detected)
 
-        if any(k in norm_text for k in ["smoke", "tobacco", "cigarette", "smoking", "vape", "vaping", "alcohol", "drink", "wine", "beer", "work", "job", "occupation", "stress", "drugs", "cocaine", "substance"]):
+        # SOCIAL HISTORY: only when asking about patient's habits/history (interrogative or inquiry verbs)
+        if (
+            any(k in norm_text for k in ["smoke", "tobacco", "cigarette", "smoking", "vape", "vaping", "alcohol", "drink", "wine", "beer", "work", "job", "occupation", "stress", "drugs", "cocaine", "substance"])
+            and (is_interrogative or any(k in norm_text for k in ["history", "how much", "how many", "packs", "glasses", "do you", "have you", "what is your"]))
+        ):
             return result(MedicalIntent.SOCIAL_HISTORY, "HISTORY_QUESTION", "social_history", "habits_or_occupation", ui_category="SocialHx", empathy=empathy_detected)
 
         # -------------------------------------------------------------
-        # 11. OPQRST DIMENSIONS
+        # 15. OPQRST DIMENSIONS
         # -------------------------------------------------------------
         # Onset Activity
         onset_act_triggers = [

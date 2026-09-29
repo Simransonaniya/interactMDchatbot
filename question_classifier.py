@@ -35,7 +35,12 @@ class IntentCategory(str, Enum):
     CONFIRMATION = "CONFIRMATION"
     CHALLENGE = "CHALLENGE"
     EMPATHY_REASSURANCE = "EMPATHY_REASSURANCE"
+    MANAGEMENT_INSTRUCTION = "MANAGEMENT_INSTRUCTION"
     MANAGEMENT_STATEMENT = "MANAGEMENT_STATEMENT"
+    LIFESTYLE_MANAGEMENT = "LIFESTYLE_MANAGEMENT"
+    CLINICAL_CLAIM = "CLINICAL_CLAIM"
+    CLINICAL_INTERPRETATION = "CLINICAL_INTERPRETATION"
+    CONTEXTUAL_HISTORY_QUESTION = "CONTEXTUAL_HISTORY_QUESTION"
     MEDICATION_STATEMENT = "MEDICATION_STATEMENT"
     MEDICATION_NAME_FRAGMENT = "MEDICATION_NAME_FRAGMENT"
     MEDICATION_ADHERENCE = "MEDICATION_ADHERENCE"
@@ -108,7 +113,15 @@ class ClassifiedIntent:
         confidence: float = 1.0,
         topic: Optional[str] = None,
         slot: Optional[str] = None,
-        negated: bool = False
+        negated: bool = False,
+        message_role: Optional[str] = None,
+        patient_state_slots_to_retrieve: Optional[List[str]] = None,
+        medication_reference: bool = False,
+        diet_reference: bool = False,
+        meal: Optional[str] = None,
+        temporal_relation: Optional[str] = None,
+        lifestyle_behaviors: Optional[List[str]] = None,
+        claim_type: Optional[str] = None
     ):
         self.raw_query = raw_query
         self.category = category
@@ -131,6 +144,14 @@ class ClassifiedIntent:
         self.topic = topic or subconcept or category.value
         self.slot = slot or (self.slots[0] if self.slots else self.subconcept)
         self.negated = negated
+        self.message_role = message_role or category.value
+        self.patient_state_slots_to_retrieve = patient_state_slots_to_retrieve or []
+        self.medication_reference = medication_reference
+        self.diet_reference = diet_reference
+        self.meal = meal
+        self.temporal_relation = temporal_relation
+        self.lifestyle_behaviors = lifestyle_behaviors or []
+        self.claim_type = claim_type
 
     @property
     def primary_type(self) -> str:
@@ -152,6 +173,16 @@ class ClassifiedIntent:
             return "HISTORY_QUESTION"
         if self.category in [IntentCategory.EMPATHY, IntentCategory.EMPATHY_REASSURANCE]:
             return "EMPATHY_REASSURANCE"
+        if self.category in [IntentCategory.MANAGEMENT_INSTRUCTION, IntentCategory.MANAGEMENT_STATEMENT]:
+            return "MANAGEMENT_INSTRUCTION"
+        if self.category == IntentCategory.LIFESTYLE_MANAGEMENT:
+            return "LIFESTYLE_MANAGEMENT"
+        if self.category in [IntentCategory.CLINICAL_CLAIM, IntentCategory.CLINICAL_INTERPRETATION]:
+            return "CLINICAL_CLAIM"
+        if self.category == IntentCategory.CONTEXTUAL_HISTORY_QUESTION:
+            return "CONTEXTUAL_HISTORY_QUESTION"
+        if self.category == IntentCategory.MEDICATION_STATEMENT:
+            return "MEDICATION_STATEMENT"
         if self.category in [IntentCategory.EXAMINATION_REQUEST, IntentCategory.EXAM_REQUEST]:
             return "EXAM_REQUEST"
         if self.category in [IntentCategory.OUT_OF_SCOPE, IntentCategory.OFF_TOPIC]:
@@ -167,7 +198,7 @@ class ClassifiedIntent:
         return self.category.value
 
     def __repr__(self):
-        return f"<ClassifiedIntent category={self.category.value} subconcept={self.subconcept} slots={self.slots} time={self.time_reference} relationship={self.relationship}>"
+        return f"<ClassifiedIntent category={self.category.value} role={self.message_role} subconcept={self.subconcept} slots={self.slots} time={self.time_reference} relationship={self.relationship}>"
 
 
 # Global singleton instance of MedicalIntentClassifier
@@ -199,6 +230,11 @@ class QuestionClassifier:
             MedicalIntent.MEDICATION_ALLERGY_QUERY: IntentCategory.MEDICATION_ALLERGY_QUERY,
             MedicalIntent.MEDICATION_DURATION_QUERY: IntentCategory.MEDICATION_DURATION_QUERY,
             MedicalIntent.MEDICATION_UNKNOWN: IntentCategory.MEDICATION_UNKNOWN,
+            MedicalIntent.MANAGEMENT_INSTRUCTION: IntentCategory.MANAGEMENT_INSTRUCTION,
+            MedicalIntent.LIFESTYLE_MANAGEMENT: IntentCategory.LIFESTYLE_MANAGEMENT,
+            MedicalIntent.CLINICAL_CLAIM: IntentCategory.CLINICAL_CLAIM,
+            MedicalIntent.CLINICAL_INTERPRETATION: IntentCategory.CLINICAL_INTERPRETATION,
+            MedicalIntent.CONTEXTUAL_HISTORY_QUESTION: IntentCategory.CONTEXTUAL_HISTORY_QUESTION,
             MedicalIntent.DIET_HISTORY: IntentCategory.SOCIAL_HISTORY,
             MedicalIntent.ONSET_TIMING: IntentCategory.ONSET_TIMING,
             MedicalIntent.ONSET_ACTIVITY: IntentCategory.ONSET_ACTIVITY,
@@ -265,7 +301,19 @@ class QuestionClassifier:
             slots = [nlu_res.slot] if nlu_res.slot else ["general_meal"]
         elif nlu_res.intent == MedicalIntent.MEDICATION_STATEMENT:
             subconcept = "medication_instruction"
-            slots = ["treatment_order"]
+            slots = []
+        elif nlu_res.intent == MedicalIntent.MANAGEMENT_INSTRUCTION:
+            subconcept = "management_instruction"
+            slots = []
+        elif nlu_res.intent == MedicalIntent.LIFESTYLE_MANAGEMENT:
+            subconcept = "lifestyle_advice"
+            slots = []
+        elif nlu_res.intent in [MedicalIntent.CLINICAL_CLAIM, MedicalIntent.CLINICAL_INTERPRETATION]:
+            subconcept = nlu_res.claim_type or "clinical_claim"
+            slots = []
+        elif nlu_res.intent == MedicalIntent.CONTEXTUAL_HISTORY_QUESTION:
+            subconcept = "contextual_medication_diet"
+            slots = ["medication_timing_with_food", "breakfast"]
         elif nlu_res.intent == MedicalIntent.MEDICATION_NAME_FRAGMENT:
             subconcept = "medication_fragment"
             slots = ["medication_fragment"]
@@ -304,5 +352,13 @@ class QuestionClassifier:
             confidence=nlu_res.confidence,
             topic=nlu_res.topic,
             slot=nlu_res.slot,
-            negated=nlu_res.negated
+            negated=nlu_res.negated,
+            message_role=nlu_res.message_role,
+            patient_state_slots_to_retrieve=nlu_res.patient_state_slots_to_retrieve,
+            medication_reference=nlu_res.medication_reference,
+            diet_reference=nlu_res.diet_reference,
+            meal=nlu_res.meal,
+            temporal_relation=nlu_res.temporal_relation,
+            lifestyle_behaviors=nlu_res.lifestyle_behaviors,
+            claim_type=nlu_res.claim_type
         )

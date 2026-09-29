@@ -36,6 +36,8 @@ CONTRACTIONS = {
     r"\blets\b": "let us",
     r"\bwhat's\b": "what is",
     r"\bwhats\b": "what is",
+    r"\bthat's\b": "that is",
+    r"\bthats\b": "that is",
     r"\bwhere's\b": "where is",
     r"\bhow's\b": "how is",
     r"\bit's\b": "it is",
@@ -107,6 +109,8 @@ TYPO_MAPPINGS: List[Tuple[str, str]] = [
     (r"\bradit[a-z]*\b", "radiate"),
     
     # Common colloquial / non-native grammar phrasing
+    (r"\bregular\s+means\b", "regular meals"),
+    (r"\ba\s+anxiety\b", "anxiety"),
     (r"\bhad\s+you\s+breakfast\b", "did you have breakfast"),
     (r"\bhad\s+you\s+lunch\b", "did you have lunch"),
     (r"\bhad\s+you\s+dinner\b", "did you have dinner"),

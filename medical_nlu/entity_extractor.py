@@ -113,6 +113,16 @@ PROCEDURE_PATTERNS = [
     (r"\b(physical\s+exam(?:ination)?|cardiovascular\s+exam|chest\s+exam|listen\s+to\s+(?:your\s+)?(?:heart|lungs|chest)|auscultat[a-z]*)\b", "physical_exam"),
 ]
 
+LIFESTYLE_BEHAVIOR_PATTERNS = [
+    (r"\b(caffeine|coffee|tea|energy\s+drinks?)\b", "caffeine"),
+    (r"\b(regular\s+sleep|sleep|restful\s+sleep|bedtime|hours\s+of\s+sleep)\b", "sleep"),
+    (r"\b(lightweight|light\s+exercise|exercise|workout|gym|walking|jogging|physical\s+activity)\b", "exercise"),
+    (r"\b(regular\s+meals?|regular\s+means?|healthy\s+diet|dietary\s+changes?|reduce\s+salt)\b", "diet"),
+    (r"\b(stress|reduce\s+stress|stress\s+management|meditation|relaxation|relaxation\s+exercise)\b", "stress_reduction"),
+    (r"\b(smoke|smoking|cigarettes?|tobacco|vape|vaping)\b", "smoking"),
+    (r"\b(alcohol|drinking|wine|beer|liquor)\b", "alcohol"),
+]
+
 
 class MedicalEntityExtractor:
     """Production-grade medical entity extractor with multi-attribute parsing."""
@@ -413,6 +423,18 @@ class MedicalEntityExtractor:
                     text=m.group(0),
                     normalized=norm,
                     type="PROCEDURE",
+                    start=m.start(),
+                    end=m.end(),
+                    confidence=0.95
+                ))
+
+        # 17. LIFESTYLE_BEHAVIOR extraction
+        for pat, norm in LIFESTYLE_BEHAVIOR_PATTERNS:
+            for m in re.finditer(pat, text_to_scan):
+                entities.append(MedicalEntity(
+                    text=m.group(0),
+                    normalized=norm,
+                    type="LIFESTYLE_BEHAVIOR",
                     start=m.start(),
                     end=m.end(),
                     confidence=0.95
